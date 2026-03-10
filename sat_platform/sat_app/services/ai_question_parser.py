@@ -52,7 +52,10 @@ def parse_raw_question_block(block: dict) -> Dict[str, Any]:
 
     client = get_ai_client()
     messages = _build_messages(block)
-    model = current_app.config.get("AI_PARSER_MODEL", current_app.config.get("AI_EXPLAINER_MODEL"))
+    model = current_app.config.get(
+        "AI_PARSER_MODEL",
+        current_app.config.get("AI_MODEL_NAME", "gpt-5.4"),
+    )
     try:
         response = client.chat(messages, model=model)
         content = response["choices"][0]["message"]["content"]

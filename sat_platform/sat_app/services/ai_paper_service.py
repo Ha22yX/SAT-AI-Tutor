@@ -344,7 +344,10 @@ def _call_question_model(prompt_text: str, *, purpose: str, job_id: int | None) 
         "all required fields."
     )
     payload = {
-        "model": current_app.config.get("AI_PAPER_GENERATOR_MODEL", "gpt-5.2"),
+        "model": current_app.config.get(
+            "AI_PAPER_GENERATOR_MODEL",
+            current_app.config.get("AI_MODEL_NAME", "gpt-5.4"),
+        ),
         "input": [
             {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
             {"role": "user", "content": [{"type": "input_text", "text": prompt_text}]},

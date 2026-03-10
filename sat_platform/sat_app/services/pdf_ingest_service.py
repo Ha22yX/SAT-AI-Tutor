@@ -393,7 +393,10 @@ def _extract_coarse_questions(page: dict, *, job_id: int | None) -> List[dict]:
         user_content.append({"type": "input_image", "image_url": image_b64})
 
     payload = {
-        "model": current_app.config.get("AI_PDF_VISION_MODEL", "gpt-5.2"),
+        "model": current_app.config.get(
+            "AI_PDF_VISION_MODEL",
+            current_app.config.get("AI_MODEL_NAME", "gpt-5.4"),
+        ),
         "input": [
             {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
             {"role": "user", "content": user_content},
@@ -645,7 +648,10 @@ def _normalize_question_item(item: dict, *, job_id: int | None) -> dict | None:
         user_content.append({"type": "input_image", "image_url": item.get("page_image_b64")})
 
     payload = {
-        "model": current_app.config.get("AI_PDF_NORMALIZE_MODEL", "gpt-5.2"),
+        "model": current_app.config.get(
+            "AI_PDF_NORMALIZE_MODEL",
+            current_app.config.get("AI_MODEL_NAME", "gpt-5.4"),
+        ),
         "input": [
             {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
             {"role": "user", "content": user_content},
@@ -758,7 +764,10 @@ def _solve_choice_answer(normalized: dict, raw_item: dict, *, job_id: int | None
     payload = {
         "model": current_app.config.get(
             "AI_PDF_SOLVER_MODEL",
-            current_app.config.get("AI_PDF_NORMALIZE_MODEL", "gpt-5.2"),
+            current_app.config.get(
+                "AI_PDF_NORMALIZE_MODEL",
+                current_app.config.get("AI_MODEL_NAME", "gpt-5.4"),
+            ),
         ),
         "input": [
             {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
@@ -1100,7 +1109,10 @@ def _request_page_questions(
         user_content.append({"type": "input_image", "image_url": image_b64})
 
     payload = {
-        "model": current_app.config.get("AI_PDF_VISION_MODEL", "gpt-5.2"),
+        "model": current_app.config.get(
+            "AI_PDF_VISION_MODEL",
+            current_app.config.get("AI_MODEL_NAME", "gpt-5.4"),
+        ),
         "input": [
             {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
             {"role": "user", "content": user_content},
@@ -1148,7 +1160,10 @@ def _normalize_question(
     schema_hint = ""
     user_prompt = json.dumps(question_payload, ensure_ascii=False, indent=2)
     payload = {
-        "model": current_app.config.get("AI_PDF_NORMALIZE_MODEL", "gpt-5.2"),
+        "model": current_app.config.get(
+            "AI_PDF_NORMALIZE_MODEL",
+            current_app.config.get("AI_MODEL_NAME", "gpt-5.4"),
+        ),
         "input": [
             {"role": "system", "content": [{"type": "input_text", "text": f"{system_prompt} {schema_hint}"}]},
             {
@@ -1395,7 +1410,8 @@ def _solve_question_with_ai(
     if not choices:
         return None
     model_name = app.config.get("AI_PDF_SOLVER_MODEL") or app.config.get(
-        "AI_PDF_NORMALIZE_MODEL", "gpt-5.2"
+        "AI_PDF_NORMALIZE_MODEL",
+        app.config.get("AI_MODEL_NAME", "gpt-5.4"),
     )
     system_prompt = _build_solver_system_prompt(normalized_question.get("section") or question_payload.get("section"))
     passage = normalized_question.get("passage", {}) or {}
