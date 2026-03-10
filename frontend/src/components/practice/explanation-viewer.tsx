@@ -42,12 +42,16 @@ type HighlightedTextProps = {
 };
 
 export function HighlightedText({ text, directives = [], className }: HighlightedTextProps) {
+  const { normalizedText, inlineDirectives } = useMemo(
+    () => parseInlineHighlightTags(text || ""),
+    [text]
+  );
   const normalizedDirectives = useMemo(
     () =>
-      (directives || []).filter(
+      [...(directives || []), ...inlineDirectives].filter(
         (d) => d && typeof d.text === "string" && d.text.trim().length > 0
       ),
-    [directives]
+    [directives, inlineDirectives]
   );
 
   const renderHighlighted = useCallback(
@@ -89,7 +93,7 @@ export function HighlightedText({ text, directives = [], className }: Highlighte
     [normalizedDirectives]
   );
 
-  if (!text?.trim()) {
+  if (!normalizedText?.trim()) {
     return null;
   }
 
@@ -112,10 +116,35 @@ export function HighlightedText({ text, directives = [], className }: Highlighte
           text: ({ children }) => <>{renderHighlighted(String(children ?? ""))}</>,
         }}
       >
-        {text}
+        {normalizedText}
       </ReactMarkdown>
     </div>
   );
+}
+
+function parseInlineHighlightTags(value: string): {
+  normalizedText: string;
+  inlineDirectives: StepDirective[];
+} {
+  if (!value || !value.includes("<highlight>")) {
+    return { normalizedText: value, inlineDirectives: [] };
+  }
+  const directives: StepDirective[] = [];
+  const normalizedText = value.replace(
+    /<highlight>([\s\S]*?)<\/highlight>/gi,
+    (_full, inner: string) => {
+      const snippet = String(inner || "").trim();
+      if (snippet) {
+        directives.push({
+          target: "passage",
+          text: snippet,
+          action: "underline",
+        });
+      }
+      return inner || "";
+    }
+  );
+  return { normalizedText, inlineDirectives: directives };
 }
 
 function getDirectiveClass(action?: string) {
