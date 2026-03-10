@@ -77,13 +77,13 @@ export function HighlightedText({ text, directives = [], className }: Highlighte
         const matchText = remaining.slice(matchIndex, matchIndex + snippet.length);
         const classNames = getDirectiveClass(directive.action);
         segments.push(
-          <mark
+          <span
             key={`${index}-highlight`}
             className={`rounded px-1 ${classNames}`}
             data-action={directive.action}
           >
             {matchText}
-          </mark>
+          </span>
         );
         remaining = remaining.slice(matchIndex + snippet.length);
       });
@@ -155,8 +155,8 @@ function parseInlineHighlightTags(value: string): {
 function getDirectiveClass(action?: string) {
   switch (action) {
     case "underline":
-      // Only underline without highlight color
-      return "underline decoration-white/80 decoration-2 bg-transparent text-inherit";
+      // Keep underline highly visible on dark backgrounds.
+      return "underline decoration-amber-300 decoration-2 underline-offset-2 bg-amber-200/10 text-inherit";
     case "circle":
       return "outline outline-2 outline-amber-300 rounded-full";
     case "strike":
