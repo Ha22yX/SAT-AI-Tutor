@@ -49,43 +49,8 @@ export function HighlightedText({ text, directives = [], className }: Highlighte
       ),
     [directives]
   );
-
-  const renderHighlighted = useCallback(
-    (value: string): ReactNode => {
-      if (!value) return null;
-      if (!normalizedDirectives.length) return value;
-
-      let remaining = value;
-      const segments: ReactNode[] = [];
-
-      const pushText = (chunk: string) => {
-        if (!chunk) return;
-        segments.push(<span key={`${segments.length}-plain`}>{chunk}</span>);
-      };
-
-      normalizedDirectives.forEach((directive, index) => {
-        const snippet = directive.text?.trim();
-        if (!snippet) return;
-        const matchIndex = remaining.toLowerCase().indexOf(snippet.toLowerCase());
-        if (matchIndex === -1) return;
-        const before = remaining.slice(0, matchIndex);
-        pushText(before);
-        const matchText = remaining.slice(matchIndex, matchIndex + snippet.length);
-        const classNames = getDirectiveClass(directive.action);
-        segments.push(
-          <mark
-            key={`${index}-highlight`}
-            className={`rounded px-1 ${classNames}`}
-            data-action={directive.action}
-          >
-            {matchText}
-          </mark>
-        );
-        remaining = remaining.slice(matchIndex + snippet.length);
-      });
-      pushText(remaining);
-      return segments;
-    },
+  const decorationPlugin = useMemo(
+    () => createDecorationRehypePlugin(normalizedDirectives),
     [normalizedDirectives]
   );
 
@@ -97,7 +62,7 @@ export function HighlightedText({ text, directives = [], className }: Highlighte
     <div className={className}>
       <ReactMarkdown
         remarkPlugins={[remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[rehypeKatex, decorationPlugin]}
         skipHtml
         components={{
           p: ({ children }) => (
@@ -109,7 +74,6 @@ export function HighlightedText({ text, directives = [], className }: Highlighte
           code: ({ children }) => (
             <code className="rounded bg-white/10 px-1 py-0.5 text-[0.95em]">{children}</code>
           ),
-          text: ({ children }) => <>{renderHighlighted(String(children ?? ""))}</>,
         }}
       >
         {text}
@@ -136,6 +100,120 @@ function getDirectiveClass(action?: string) {
     default:
       return "bg-amber-300/40";
   }
+}
+
+type HastNode = {
+  type?: string;
+  value?: string;
+  tagName?: string;
+  properties?: Record<string, unknown>;
+  children?: HastNode[];
+};
+
+function createDecorationRehypePlugin(directives: StepDirective[]) {
+  return function decorationPlugin(tree: HastNode) {
+    if (!directives.length) return;
+    decorateTreeTextNodes(tree, directives, false);
+  };
+}
+
+function decorateTreeTextNodes(
+  node: HastNode | undefined,
+  directives: StepDirective[],
+  insideKatex: boolean
+): void {
+  if (!node || !Array.isArray(node.children) || !node.children.length) {
+    return;
+  }
+
+  const parentTag = String(node.tagName || "").toLowerCase();
+  const parentProps = node.properties || {};
+  const className = parentProps["className"];
+  const classNames = Array.isArray(className)
+    ? className.map(String)
+    : typeof className === "string"
+    ? className.split(/\s+/)
+    : [];
+  const nowInsideKatex = insideKatex || classNames.some((name) => name.includes("katex"));
+  const shouldSkipTextDecoration =
+    parentTag === "code" || parentTag === "pre" || parentTag === "script" || parentTag === "style";
+
+  for (let index = 0; index < node.children.length; index += 1) {
+    const child = node.children[index];
+    if (!child) continue;
+
+    if (
+      child.type === "text" &&
+      typeof child.value === "string" &&
+      child.value &&
+      !shouldSkipTextDecoration &&
+      !nowInsideKatex
+    ) {
+      const segments = splitTextByDirectives(child.value, directives);
+      if (segments.length > 1) {
+        const replacementNodes = segments.map((segment) => {
+          if (!segment.action) {
+            return { type: "text", value: segment.text } as HastNode;
+          }
+          const classes = getDirectiveClass(segment.action)
+            .split(/\s+/)
+            .filter(Boolean);
+          return {
+            type: "element",
+            tagName: "mark",
+            properties: {
+              className: ["rounded", "px-1", ...classes],
+              dataAction: segment.action,
+            },
+            children: [{ type: "text", value: segment.text }],
+          } as HastNode;
+        });
+        node.children.splice(index, 1, ...replacementNodes);
+        index += replacementNodes.length - 1;
+      }
+      continue;
+    }
+
+    decorateTreeTextNodes(child, directives, nowInsideKatex);
+  }
+}
+
+function splitTextByDirectives(
+  value: string,
+  directives: StepDirective[]
+): Array<{ text: string; action?: StepDirective["action"] }> {
+  if (!value || !directives.length) {
+    return [{ text: value }];
+  }
+
+  let cursor = 0;
+  let working = value;
+  const out: Array<{ text: string; action?: StepDirective["action"] }> = [];
+
+  for (const directive of directives) {
+    const snippet = directive.text?.trim();
+    if (!snippet) continue;
+    const hit = working.toLowerCase().indexOf(snippet.toLowerCase());
+    if (hit < 0) continue;
+
+    const absoluteStart = cursor + hit;
+    const absoluteEnd = absoluteStart + snippet.length;
+    if (absoluteStart > cursor) {
+      out.push({ text: value.slice(cursor, absoluteStart) });
+    }
+    out.push({
+      text: value.slice(absoluteStart, absoluteEnd),
+      action: directive.action,
+    });
+    cursor = absoluteEnd;
+    working = value.slice(cursor);
+  }
+
+  if (cursor < value.length) {
+    out.push({ text: value.slice(cursor) });
+  }
+
+  return out.length ? out : [{ text: value }];
 }
 
 function MathText({ text, className }: { text?: string; className?: string }) {
