@@ -9,17 +9,18 @@ type DecorationRecord = {
 };
 
 export function getQuestionDecorations(
-  question?: Pick<SessionQuestion, "metadata"> | null
+  question?: Pick<SessionQuestion, "metadata" | "passage"> | null
 ): StepDirective[] {
-  const metadata = parseMetadata(question?.metadata);
-  if (!metadata) {
-    return [];
+  const sources: unknown[] = [];
+  if (question?.metadata && typeof question.metadata === "object") {
+    sources.push((question.metadata as Record<string, unknown>)["decorations"]);
   }
-  const decorations = parseDecorations(metadata["decorations"]);
-  if (!decorations.length) {
-    return [];
+  const passageMeta = question?.passage?.metadata;
+  if (passageMeta && typeof passageMeta === "object") {
+    sources.push((passageMeta as Record<string, unknown>)["decorations"]);
   }
-  return decorations
+  return sources
+    .flatMap((decorations) => (Array.isArray(decorations) ? decorations : []))
     .map((entry) => normalizeDecoration(entry))
     .filter((entry): entry is StepDirective => Boolean(entry));
 }
@@ -33,59 +34,31 @@ function normalizeDecoration(entry: unknown): StepDirective | null {
   if (!text) {
     return null;
   }
-  const target = normalizeTarget(record.target);
-  const action = normalizeAction(record.action);
+  const rawTarget =
+    typeof record.target === "string" ? record.target.trim().toLowerCase() : "";
+  const target: StepDirective["target"] =
+    rawTarget === "passage" ||
+    rawTarget === "stem" ||
+    rawTarget === "choices" ||
+    rawTarget === "figure"
+      ? rawTarget
+      : "passage";
+  const rawAction =
+    typeof record.action === "string" ? record.action.trim().toLowerCase() : "";
+  const action: StepDirective["action"] =
+    rawAction === "highlight" ||
+    rawAction === "underline" ||
+    rawAction === "circle" ||
+    rawAction === "strike" ||
+    rawAction === "note" ||
+    rawAction === "color" ||
+    rawAction === "font"
+      ? rawAction
+      : "underline";
   return {
     target,
     text,
     action,
   };
-}
-
-function parseMetadata(raw: unknown): Record<string, unknown> | null {
-  if (!raw) return null;
-  if (typeof raw === "object") return raw as Record<string, unknown>;
-  if (typeof raw !== "string") return null;
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
-
-function parseDecorations(raw: unknown): unknown[] {
-  if (Array.isArray(raw)) return raw;
-  if (typeof raw !== "string") return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function normalizeTarget(raw: unknown): StepDirective["target"] {
-  const value = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-  if (value === "stem" || value === "choices" || value === "figure") {
-    return value;
-  }
-  return "passage";
-}
-
-function normalizeAction(raw: unknown): StepDirective["action"] {
-  const value = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-  if (
-    value === "highlight" ||
-    value === "underline" ||
-    value === "circle" ||
-    value === "strike" ||
-    value === "note" ||
-    value === "color" ||
-    value === "font"
-  ) {
-    return value;
-  }
-  return "underline";
 }
 
