@@ -416,6 +416,19 @@ def _coerce_draft_payload(payload: dict | None) -> dict:
     return data
 
 
+def _extract_published_question_id(draft: QuestionDraft) -> int | None:
+    payload = draft.payload if isinstance(draft.payload, dict) else {}
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    raw_value = metadata.get("published_question_id")
+    try:
+        qid = int(raw_value)
+        return qid if qid > 0 else None
+    except Exception:
+        return None
+
+
 def _figure_root() -> Path:
     root = Path(current_app.instance_path) / FIGURE_DIR_NAME
     root.mkdir(parents=True, exist_ok=True)
@@ -1823,9 +1836,24 @@ def publish_draft(draft_id: int):
     draft = db.session.get(QuestionDraft, draft_id)
     if not draft or inspect(draft).deleted:
         abort(404)
+    existing_qid = _extract_published_question_id(draft)
+    if existing_qid:
+        existing_question = db.session.get(Question, existing_qid)
+        if existing_question:
+            return (
+                jsonify(
+                    {
+                        "message": "Draft already published",
+                        "question": question_schema.dump(existing_question),
+                    }
+                ),
+                HTTPStatus.CONFLICT,
+            )
 
     def _publish():
-        payload = _coerce_draft_payload(draft.payload)
+        draft_raw_payload = draft.payload if isinstance(draft.payload, dict) else {}
+        coarse_uid = draft_raw_payload.get("coarse_uid")
+        payload = _coerce_draft_payload(draft_raw_payload)
         precomputed_explanations = payload.pop("_ai_explanations", None)
         # If ingest wrote explanations into metadata.ai_explanations, use them as precomputed
         if not precomputed_explanations:
@@ -1878,6 +1906,13 @@ def publish_draft(draft_id: int):
         if draft.source_id and not question_payload.get("source_id"):
             question_payload["source_id"] = draft.source_id
         question = question_service.create_question(question_payload, commit=False)
+        metadata_json = question.metadata_json if isinstance(question.metadata_json, dict) else {}
+        metadata_json["coarse_draft_link"] = {
+            "draft_id": draft.id,
+            "job_id": draft.job_id,
+            "coarse_uid": str(coarse_uid) if coarse_uid else None,
+        }
+        question.metadata_json = metadata_json
         if requires_figure:
             question.has_figure = True
             db.session.add(question)
@@ -1909,9 +1944,18 @@ def publish_draft(draft_id: int):
                 )
         else:
             post_publish_langs = missing_langs
-        # Ensure all pending state (question/figures) is flushed before removing draft
+        # Ensure all pending state (question/figures) is flushed before updating draft link.
         db.session.flush()
-        db.session.delete(draft)
+        draft_payload = draft.payload if isinstance(draft.payload, dict) else {}
+        draft_meta = draft_payload.get("metadata")
+        if not isinstance(draft_meta, dict):
+            draft_meta = {}
+        draft_meta["published_question_id"] = question.id
+        draft_meta["published_at"] = datetime.now(timezone.utc).isoformat()
+        draft_payload["metadata"] = draft_meta
+        draft.payload = draft_payload
+        draft.is_verified = True
+        db.session.add(draft)
         try:
             _commit_with_retry()
         except ObjectDeletedError:
@@ -1919,8 +1963,7 @@ def publish_draft(draft_id: int):
             abort(404)
         if post_publish_langs:
             _spawn_background_explanations(question.id, post_publish_langs)
-        # Include job_id so frontend can scope the removal without reloading all jobs
-        job_event_broker.publish({"type": "draft_removed", "payload": {"id": draft_id, "job_id": draft.job_id}})
+        job_event_broker.publish({"type": "draft", "payload": draft.serialize()})
         return jsonify({"question": question_schema.dump(question)}), HTTPStatus.CREATED
 
     return _run_with_lock_retry(_publish)
