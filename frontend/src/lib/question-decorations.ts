@@ -11,12 +11,12 @@ type DecorationRecord = {
 export function getQuestionDecorations(
   question?: Pick<SessionQuestion, "metadata"> | null
 ): StepDirective[] {
-  if (!question?.metadata || typeof question.metadata !== "object") {
+  const metadata = parseMetadata(question?.metadata);
+  if (!metadata) {
     return [];
   }
-  const metadata = question.metadata as Record<string, unknown>;
-  const decorations = metadata["decorations"];
-  if (!Array.isArray(decorations)) {
+  const decorations = parseDecorations(metadata["decorations"]);
+  if (!decorations.length) {
     return [];
   }
   return decorations
@@ -33,14 +33,59 @@ function normalizeDecoration(entry: unknown): StepDirective | null {
   if (!text) {
     return null;
   }
-  const target =
-    typeof record.target === "string" && record.target.length > 0 ? (record.target as StepDirective["target"]) : "passage";
-  const action =
-    typeof record.action === "string" && record.action.length > 0 ? (record.action as StepDirective["action"]) : "underline";
+  const target = normalizeTarget(record.target);
+  const action = normalizeAction(record.action);
   return {
     target,
     text,
     action,
   };
+}
+
+function parseMetadata(raw: unknown): Record<string, unknown> | null {
+  if (!raw) return null;
+  if (typeof raw === "object") return raw as Record<string, unknown>;
+  if (typeof raw !== "string") return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseDecorations(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw !== "string") return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeTarget(raw: unknown): StepDirective["target"] {
+  const value = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (value === "stem" || value === "choices" || value === "figure") {
+    return value;
+  }
+  return "passage";
+}
+
+function normalizeAction(raw: unknown): StepDirective["action"] {
+  const value = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (
+    value === "highlight" ||
+    value === "underline" ||
+    value === "circle" ||
+    value === "strike" ||
+    value === "note" ||
+    value === "color" ||
+    value === "font"
+  ) {
+    return value;
+  }
+  return "underline";
 }
 
