@@ -17,10 +17,10 @@ class SkillDescriptor:
 
 _SKILL_TAXONOMY: List[SkillDescriptor] = [
     SkillDescriptor(
-        tag="RW_MainIdeasEvidence",
-        label="Reading & Writing · Main Ideas & Evidence",
+        tag="RW_InformationIdeas",
+        label="Reading & Writing · Information & Ideas",
         domain="Reading & Writing",
-        description="Identify central ideas, thesis statements, and the evidence that supports them.",
+        description="Understand passage meaning, infer viewpoints, find textual evidence, and interpret data.",
         order=10,
     ),
     SkillDescriptor(
@@ -31,32 +31,18 @@ _SKILL_TAXONOMY: List[SkillDescriptor] = [
         order=20,
     ),
     SkillDescriptor(
-        tag="RW_WordsInContext",
-        label="Reading & Writing · Words in Context",
-        domain="Reading & Writing",
-        description="Interpret vocabulary, phrases, and figurative language using contextual clues.",
-        order=30,
-    ),
-    SkillDescriptor(
-        tag="RW_DataInterpretation",
-        label="Reading & Writing · Quantitative Info",
-        domain="Reading & Writing",
-        description="Read and reason about tables, charts, and science / social science data within passages.",
-        order=40,
-    ),
-    SkillDescriptor(
         tag="RW_ExpressionOfIdeas",
         label="Reading & Writing · Expression of Ideas",
         domain="Reading & Writing",
         description="Revise text for precision, organization, cohesion, and rhetorical effectiveness.",
-        order=50,
+        order=30,
     ),
     SkillDescriptor(
-        tag="RW_StandardEnglish",
-        label="Reading & Writing · Standard English",
+        tag="RW_StandardEnglishConventions",
+        label="Reading & Writing · Standard English Conventions",
         domain="Reading & Writing",
         description="Apply grammar, usage, agreement, and punctuation conventions.",
-        order=60,
+        order=40,
     ),
     SkillDescriptor(
         tag="M_Algebra",
@@ -80,18 +66,11 @@ _SKILL_TAXONOMY: List[SkillDescriptor] = [
         order=130,
     ),
     SkillDescriptor(
-        tag="M_Geometry",
-        label="Math · Geometry & Measurement",
+        tag="M_GeometryTrigonometry",
+        label="Math · Geometry & Trigonometry",
         domain="Math",
-        description="Reason about shapes, angles, area/volume, and coordinate geometry.",
+        description="Solve geometry and trigonometry problems involving shapes, circles, area/volume, coordinates, and trig ratios.",
         order=140,
-    ),
-    SkillDescriptor(
-        tag="M_Trigonometry",
-        label="Math · Trigonometry",
-        domain="Math",
-        description="Apply trigonometric ratios, the unit circle, and periodic functions.",
-        order=150,
     ),
 ]
 
@@ -101,40 +80,46 @@ _SKILL_LOWER_LOOKUP: Dict[str, str] = {entry.tag.lower(): entry.tag for entry in
 
 _SKILL_SYNONYMS: Dict[str, str] = {
     # Legacy canonical tags
-    "rw_mainidea": "RW_MainIdeasEvidence",
-    "rw_detailevidence": "RW_MainIdeasEvidence",
-    "rw_wordsincontext": "RW_WordsInContext",
+    "rw_mainidea": "RW_InformationIdeas",
+    "rw_detailevidence": "RW_InformationIdeas",
+    "rw_wordsincontext": "RW_CraftStructure",
     "rw_textstructure": "RW_CraftStructure",
     "rw_expressionofideas": "RW_ExpressionOfIdeas",
-    "rw_standardenglish": "RW_StandardEnglish",
-    "rw_datainterpretation": "RW_DataInterpretation",
+    "rw_standardenglish": "RW_StandardEnglishConventions",
+    "rw_datainterpretation": "RW_InformationIdeas",
+    "rw_informationideas": "RW_InformationIdeas",
+    "rw_standardenglishconventions": "RW_StandardEnglishConventions",
     "m_algebra": "M_Algebra",
     "m_advancedmath": "M_AdvancedMath",
     "m_problemsolving": "M_ProblemSolvingData",
     "m_dataanalysis": "M_ProblemSolvingData",
-    "m_geometry": "M_Geometry",
-    "m_trigonometry": "M_Trigonometry",
+    "m_geometry": "M_GeometryTrigonometry",
+    "m_trigonometry": "M_GeometryTrigonometry",
+    "m_geometrytrigonometry": "M_GeometryTrigonometry",
     # Free-form tags observed in legacy data
-    "main-idea": "RW_MainIdeasEvidence",
-    "main idea": "RW_MainIdeasEvidence",
-    "reading-comprehension": "RW_MainIdeasEvidence",
-    "reading comprehension": "RW_MainIdeasEvidence",
-    "detail-evidence": "RW_MainIdeasEvidence",
-    "context-clues": "RW_WordsInContext",
-    "contextual-vocabulary": "RW_WordsInContext",
-    "vocabulary-in-context": "RW_WordsInContext",
-    "vocabulary": "RW_WordsInContext",
+    "main-idea": "RW_InformationIdeas",
+    "main idea": "RW_InformationIdeas",
+    "reading-comprehension": "RW_InformationIdeas",
+    "reading comprehension": "RW_InformationIdeas",
+    "detail-evidence": "RW_InformationIdeas",
+    "inference": "RW_InformationIdeas",
+    "evidence": "RW_InformationIdeas",
+    "data interpretation": "RW_InformationIdeas",
+    "context-clues": "RW_CraftStructure",
+    "contextual-vocabulary": "RW_CraftStructure",
+    "vocabulary-in-context": "RW_CraftStructure",
+    "vocabulary": "RW_CraftStructure",
     "literary-text": "RW_CraftStructure",
     "literary-fiction": "RW_CraftStructure",
     "precision": "RW_ExpressionOfIdeas",
-    "rw_grammar": "RW_StandardEnglish",
-    "grammar": "RW_StandardEnglish",
-    "rw_grammarusage": "RW_StandardEnglish",
-    "science": "RW_DataInterpretation",
-    "table-reading": "RW_DataInterpretation",
-    "data-analysis": "RW_DataInterpretation",
-    "vision": "RW_DataInterpretation",
-    "rw_data": "RW_DataInterpretation",
+    "rw_grammar": "RW_StandardEnglishConventions",
+    "grammar": "RW_StandardEnglishConventions",
+    "rw_grammarusage": "RW_StandardEnglishConventions",
+    "science": "RW_InformationIdeas",
+    "table-reading": "RW_InformationIdeas",
+    "data-analysis": "RW_InformationIdeas",
+    "vision": "RW_InformationIdeas",
+    "rw_data": "RW_InformationIdeas",
     "m_statistics": "M_ProblemSolvingData",
     "algebra": "M_Algebra",
     "advanced math": "M_AdvancedMath",
@@ -142,8 +127,9 @@ _SKILL_SYNONYMS: Dict[str, str] = {
     "problem solving": "M_ProblemSolvingData",
     "problem-solving": "M_ProblemSolvingData",
     "data analysis": "M_ProblemSolvingData",
-    "geometry": "M_Geometry",
-    "trigonometry": "M_Trigonometry",
+    "geometry": "M_GeometryTrigonometry",
+    "trigonometry": "M_GeometryTrigonometry",
+    "geometry & trigonometry": "M_GeometryTrigonometry",
 }
 
 
@@ -154,6 +140,10 @@ def iter_skill_tags() -> Sequence[str]:
 
 def describe_skill(tag: str) -> dict:
     descriptor = _SKILL_LOOKUP.get(tag)
+    if descriptor is None:
+        canonical = canonicalize_tag(tag)
+        if canonical:
+            descriptor = _SKILL_LOOKUP.get(canonical)
     if descriptor:
         return {
             "tag": descriptor.tag,
@@ -198,6 +188,10 @@ def canonicalize_tags(values: Iterable[str] | None, *, limit: int | None = 2) ->
 
 def infer_section_from_tag(tag: str) -> str:
     descriptor = _SKILL_LOOKUP.get(tag)
+    if descriptor is None:
+        canonical = canonicalize_tag(tag)
+        if canonical:
+            descriptor = _SKILL_LOOKUP.get(canonical)
     if descriptor:
         return "RW" if descriptor.domain == "Reading & Writing" else "Math"
     return "RW" if tag.lower().startswith("rw") else "Math"

@@ -163,17 +163,17 @@ RW_DOMAIN_SKILL: Dict[str, Dict[str, str]] = {
 }
 DEFAULT_RW_DOMAIN = {"domain": "Information & Ideas", "skill": "Evidence-based reasoning"}
 RW_SKILL_TAGS: Dict[str, List[str]] = {
-    "main_idea": ["RW_MainIdeasEvidence"],
-    "detail": ["RW_MainIdeasEvidence"],
-    "inference": ["RW_MainIdeasEvidence"],
-    "evidence_pair": ["RW_MainIdeasEvidence"],
-    "vocabulary": ["RW_WordsInContext"],
+    "main_idea": ["RW_InformationIdeas"],
+    "detail": ["RW_InformationIdeas"],
+    "inference": ["RW_InformationIdeas"],
+    "evidence_pair": ["RW_InformationIdeas"],
+    "vocabulary": ["RW_CraftStructure"],
     "logic": ["RW_ExpressionOfIdeas"],
     "purpose": ["RW_CraftStructure"],
-    "grammar": ["RW_StandardEnglish"],
-    "grammar_complex": ["RW_StandardEnglish"],
+    "grammar": ["RW_StandardEnglishConventions"],
+    "grammar_complex": ["RW_StandardEnglishConventions"],
 }
-DEFAULT_RW_SKILL_TAGS = ["RW_MainIdeasEvidence"]
+DEFAULT_RW_SKILL_TAGS = ["RW_InformationIdeas"]
 
 RW_LENGTH_HINTS: Dict[str, str] = {
     "main_idea": "90–120 words (single paragraph, clear thesis)",
@@ -401,8 +401,8 @@ MATH_SKILL_TAGS: Dict[str, List[str]] = {
     "ratio_statistics": ["M_ProblemSolvingData"],
     "mixed_model": ["M_ProblemSolvingData"],
     "statistics": ["M_ProblemSolvingData"],
-    "geometry": ["M_Geometry"],
-    "advanced_geometry": ["M_Geometry", "M_Trigonometry"],
+    "geometry": ["M_GeometryTrigonometry"],
+    "advanced_geometry": ["M_GeometryTrigonometry"],
     "modeling": ["M_ProblemSolvingData"],
 }
 DEFAULT_MATH_SKILL_TAGS = ["M_Algebra"]

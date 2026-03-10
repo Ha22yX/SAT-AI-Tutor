@@ -18,7 +18,7 @@ def seeded_question(app_with_db):
             stem_text="Choose the correct option.",
             choices={"A": "Option A", "B": "Option B"},
             correct_answer={"value": "A"},
-            skill_tags=["RW_StandardEnglish"],
+            skill_tags=["RW_StandardEnglishConventions"],
         )
         fallback = Question(
             section="RW",
@@ -26,7 +26,7 @@ def seeded_question(app_with_db):
             stem_text="Fallback question text.",
             choices={"A": "Fallback A", "B": "Fallback B"},
             correct_answer={"value": "B"},
-            skill_tags=["RW_StandardEnglish"],
+            skill_tags=["RW_StandardEnglishConventions"],
         )
         db.session.add_all([question, fallback])
         db.session.commit()

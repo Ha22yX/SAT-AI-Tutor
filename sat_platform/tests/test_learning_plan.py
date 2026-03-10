@@ -45,7 +45,7 @@ def test_generate_daily_plan_enriched_metadata(app_with_db, monkeypatch):
             assert user_id == user.id
             return [
                 {
-                    "skill_tag": "RW_MainIdeasEvidence",
+                    "skill_tag": "RW_InformationIdeas",
                     "label": "主旨推理",
                     "domain": "Reading & Writing",
                     "mastery_score": 0.55,

@@ -41,7 +41,7 @@ def mock_pdf_ingest(monkeypatch):
                 "choices": {"A": "Alpha", "B": "Beta"},
                 "correct_answer": {"value": "A"},
                 "difficulty_level": 2,
-                "skill_tags": ["RW_DataInterpretation"],
+                "skill_tags": ["RW_InformationIdeas"],
                 "metadata": {"source": "pdf-test"},
             }
         ]
@@ -102,7 +102,7 @@ def test_pdf_ingest_flow(client, admin_token, mock_pdf_ingest):
     with client.application.app_context():
         drafts = QuestionDraft.query.all()
         assert len(drafts) == 1
-        assert drafts[0].payload["skill_tags"] == ["RW_DataInterpretation"]
+        assert drafts[0].payload["skill_tags"] == ["RW_InformationIdeas"]
         assert drafts[0].source_id == data["source_id"]
         assert QuestionSource.query.count() == 1
 

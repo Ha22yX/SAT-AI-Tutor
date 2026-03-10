@@ -85,7 +85,13 @@ def _build_normalize_system_prompt(section_hint: str | None) -> str:
             "(≤5 chars; decimal point counts; leading minus does not). Include fraction + short decimals (e.g., 2/3, 0.666, .6666, .6667) and π/radical forms if applicable.\n"
             "- has_figure: true if passage/stem relies on a figure/table/image (not options). choice_figure_keys: letters whose option has its own figure; else [].\n"
             "- difficulty_level: 1-5 with difficulty_assessment {\"level\":3,\"expected_time_sec\":75,\"rationale\":\"...\"}.\n"
-            f"- skill_tags: up to TWO from: {SKILL_TAG_PROMPT}; [] if unsure (prefer Math domains). {MATH_DOMAIN_MAP}\n"
+            f"- skill_tags: choose 1-2 from exactly: {SKILL_TAG_PROMPT}. {MATH_DOMAIN_MAP}\n"
+            "  Math routing rubric:\n"
+            "  * M_Algebra: linear equations/systems/inequalities, linear functions, slope/intercept.\n"
+            "  * M_AdvancedMath: quadratics, polynomials, exponentials, nonlinear equations/functions.\n"
+            "  * M_ProblemSolvingData: ratio/rate/percent, unit conversion, statistics, table/chart analysis.\n"
+            "  * M_GeometryTrigonometry: triangles/circles, area/volume, coordinate geometry, sin/cos/tan.\n"
+            "  If unsure, use M_Algebra.\n"
             "- metadata: include source_question_number if available; no legacy fields.\n"
             f"{MATH_ROUTE_RULES} {MATH_MC_RULES} {MATH_SPR_RULES}\n"
             "Rules: Do NOT hallucinate. Do NOT copy figure data. "
@@ -107,7 +113,13 @@ def _build_normalize_system_prompt(section_hint: str | None) -> str:
         "\"allow_fraction\": true, \"allow_pi\": true, \"strip_spaces\": true}. Include all scoring-equivalent forms if known.\n"
         "- has_figure: true if passage/stem references a figure/table/image (not options). choice_figure_keys: letters whose option contains its own figure/table; else [].\n"
         "- difficulty_level 1-5 with difficulty_assessment; keep concise rationale.\n"
-        f"- skill_tags: up to TWO from: {SKILL_TAG_PROMPT}; [] if unsure.\n"
+        f"- skill_tags: choose 1-2 from exactly: {SKILL_TAG_PROMPT}.\n"
+        "  RW routing rubric:\n"
+        "  * RW_InformationIdeas: main idea, inference, evidence, data interpretation.\n"
+        "  * RW_CraftStructure: vocabulary-in-context, author's purpose, rhetorical/structural effect.\n"
+        "  * RW_ExpressionOfIdeas: transitions, sentence placement, logical flow and clarity revisions.\n"
+        "  * RW_StandardEnglishConventions: grammar, punctuation, agreement, tense, sentence boundaries.\n"
+        "  If unsure, use RW_InformationIdeas.\n"
         "- metadata: include source_question_number if available; no legacy fields.\n"
         "Rules: Do NOT hallucinate. Do NOT copy figure contents. "
         "Do NOT store underline/highlight spans in metadata; keep them inline in passage using tags. "
@@ -729,7 +741,7 @@ def _normalize_question_item(item: dict, *, job_id: int | None) -> dict | None:
     data["skill_tags"] = _sanitize_skill_tags(data.get("skill_tags"))
     # Fallback: ensure at least one valid skill tag to pass validation
     if not data["skill_tags"]:
-        data["skill_tags"] = ["M_Algebra"] if data["section"] == "Math" else ["RW_MainIdeasEvidence"]
+        data["skill_tags"] = ["M_Algebra"] if data["section"] == "Math" else ["RW_InformationIdeas"]
     data["has_figure"] = bool(data.get("has_figure") or data.get("choice_figure_keys"))
 
     # Normalize metadata container to a dict so later assignments (e.g., page_image_b64) are safe.
