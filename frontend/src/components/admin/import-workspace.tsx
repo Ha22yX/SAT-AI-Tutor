@@ -97,6 +97,14 @@ type DraftPreview = {
   updated_at?: string;
 };
 
+function isPublishedDraft(draft: DraftPreview): boolean {
+  const metadata = draft.payload?.metadata;
+  if (!metadata || typeof metadata !== "object") return false;
+  const rawId = (metadata as Record<string, unknown>).published_question_id;
+  const id = typeof rawId === "string" ? Number(rawId) : rawId;
+  return typeof id === "number" && Number.isFinite(id) && id > 0;
+}
+
 type FigureModalState = {
   draft: DraftPreview;
   source?: FigureRecord;
@@ -259,7 +267,10 @@ export function ImportWorkspace({ variant = "standalone" }: ImportWorkspaceProps
       setImportsError(null);
       const data = await fetchImportStatus();
       const jobList = ((data?.jobs as ImportJob[]) || []).slice().sort((a, b) => b.id - a.id);
-      const draftList = ((data?.drafts as DraftPreview[]) || []).slice().sort((a, b) => b.id - a.id);
+      const draftList = ((data?.drafts as DraftPreview[]) || [])
+        .filter((draft) => !isPublishedDraft(draft))
+        .slice()
+        .sort((a, b) => b.id - a.id);
       setJobs(jobList);
       setDrafts(draftList);
       syncFigureState(draftList);
@@ -298,6 +309,14 @@ export function ImportWorkspace({ variant = "standalone" }: ImportWorkspaceProps
 
   const upsertDraft = useCallback(
     (incoming: DraftPreview) => {
+      if (isPublishedDraft(incoming)) {
+        setDrafts((prev) => {
+          const next = prev.filter((draft) => draft.id !== incoming.id);
+          syncFigureState(next);
+          return next;
+        });
+        return;
+      }
       setDrafts((prev) => {
         const filtered = prev.filter((draft) => draft.id !== incoming.id);
         const next = [incoming, ...filtered];
@@ -359,8 +378,11 @@ export function ImportWorkspace({ variant = "standalone" }: ImportWorkspaceProps
           );
           setJobs(snapshot);
         } else if (payload?.type === "draft_snapshot" && Array.isArray(payload.payload)) {
-          setDrafts(payload.payload as DraftPreview[]);
-          syncFigureState(payload.payload as DraftPreview[]);
+          const visibleDrafts = (payload.payload as DraftPreview[]).filter(
+            (draft) => !isPublishedDraft(draft)
+          );
+          setDrafts(visibleDrafts);
+          syncFigureState(visibleDrafts);
         } else if (payload?.type === "job" && payload.payload) {
           upsertJob(payload.payload as ImportJob);
         } else if (payload?.type === "job_removed" && payload?.payload?.id) {

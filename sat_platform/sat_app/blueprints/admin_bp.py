@@ -429,6 +429,11 @@ def _extract_published_question_id(draft: QuestionDraft) -> int | None:
         return None
 
 
+def _is_visible_review_draft(draft: QuestionDraft) -> bool:
+    # Keep published coarse drafts in DB, but hide them from Draft Review list.
+    return _extract_published_question_id(draft) is None
+
+
 def _figure_root() -> Path:
     root = Path(current_app.instance_path) / FIGURE_DIR_NAME
     root.mkdir(parents=True, exist_ok=True)
@@ -1514,11 +1519,7 @@ def list_imports():
         .limit(20)
         .all()
     )
-    drafts = [
-        draft.serialize()
-        for job in jobs
-        for draft in job.drafts
-    ]
+    drafts = [draft.serialize() for job in jobs for draft in job.drafts if _is_visible_review_draft(draft)]
     return jsonify(
         {
             "jobs": [_serialize_job(job) for job in jobs],
@@ -1798,7 +1799,9 @@ def import_events():
             )
             payload = [job.serialize() for job in jobs]
             yield f"data: {json.dumps({'type': 'snapshot', 'payload': payload})}\n\n"
-            drafts = [draft.serialize() for job in jobs for draft in job.drafts]
+            drafts = [
+                draft.serialize() for job in jobs for draft in job.drafts if _is_visible_review_draft(draft)
+            ]
             yield f"data: {json.dumps({'type': 'draft_snapshot', 'payload': drafts})}\n\n"
         finally:
             Session.remove()
@@ -1963,7 +1966,8 @@ def publish_draft(draft_id: int):
             abort(404)
         if post_publish_langs:
             _spawn_background_explanations(question.id, post_publish_langs)
-        job_event_broker.publish({"type": "draft", "payload": draft.serialize()})
+        # Keep draft in DB for coarse traceability, but remove from review queue after publish.
+        job_event_broker.publish({"type": "draft_removed", "payload": {"id": draft.id, "job_id": draft.job_id}})
         return jsonify({"question": question_schema.dump(question)}), HTTPStatus.CREATED
 
     return _run_with_lock_retry(_publish)
