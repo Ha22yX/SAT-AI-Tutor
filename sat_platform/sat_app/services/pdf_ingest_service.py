@@ -737,8 +737,10 @@ def _normalize_question_item(item: dict, *, job_id: int | None) -> dict | None:
     if isinstance(passage_obj, dict):
         passage_text = passage_obj.get("content_text")
         if isinstance(passage_text, str) and passage_text:
-            cleaned_passage, underline_decorations = _extract_inline_underlines(passage_text)
-            passage_obj["content_text"] = cleaned_passage
+            tagged_passage, underline_decorations = _extract_inline_underlines(passage_text)
+            # Keep inline tags in stored passage text so frontend can render directly from
+            # <highlight>/<underline>/<u> markers without depending on metadata.
+            passage_obj["content_text"] = tagged_passage
             if underline_decorations:
                 meta = data.get("metadata")
                 if not isinstance(meta, dict):
@@ -1013,10 +1015,12 @@ def _extract_inline_underlines(text: str) -> tuple[str, list[dict]]:
             decorations.append(
                 {"target": "passage", "text": inner, "action": "underline"}
             )
-        return match.group(1) or ""
+            # Canonicalize all supported underline tag variants to <highlight>.
+            return f"<highlight>{inner}</highlight>"
+        return ""
 
-    cleaned = INLINE_UNDERLINE_RE.sub(_repl, text)
-    return cleaned, decorations
+    tagged = INLINE_UNDERLINE_RE.sub(_repl, text)
+    return tagged, decorations
 
 
 def _coerce_section(raw_value: Any) -> str:

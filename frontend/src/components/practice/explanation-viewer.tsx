@@ -54,47 +54,24 @@ export function HighlightedText({ text, directives = [], className }: Highlighte
     [directives, inlineDirectives]
   );
 
-  const renderHighlighted = useCallback(
-    (value: string): ReactNode => {
-      if (!value) return null;
-      if (!normalizedDirectives.length) return value;
-
-      let remaining = value;
-      const segments: ReactNode[] = [];
-
-      const pushText = (chunk: string) => {
-        if (!chunk) return;
-        segments.push(<span key={`${segments.length}-plain`}>{chunk}</span>);
-      };
-
-      normalizedDirectives.forEach((directive, index) => {
-        const snippet = directive.text?.trim();
-        if (!snippet) return;
-        const matchIndex = remaining.toLowerCase().indexOf(snippet.toLowerCase());
-        if (matchIndex === -1) return;
-        const before = remaining.slice(0, matchIndex);
-        pushText(before);
-        const matchText = remaining.slice(matchIndex, matchIndex + snippet.length);
-        const classNames = getDirectiveClass(directive.action);
-        segments.push(
-          <span
-            key={`${index}-highlight`}
-            className={`rounded px-1 ${classNames}`}
-            data-action={directive.action}
-          >
-            {matchText}
-          </span>
-        );
-        remaining = remaining.slice(matchIndex + snippet.length);
-      });
-      pushText(remaining);
-      return segments;
-    },
-    [normalizedDirectives]
-  );
+  const renderHighlighted = useCallback((value: string): ReactNode => {
+    if (!value) return null;
+    if (!normalizedDirectives.length) return value;
+    return renderTextWithDirectives(value, normalizedDirectives);
+  }, [normalizedDirectives]);
 
   if (!normalizedText?.trim()) {
     return null;
+  }
+
+  if (normalizedDirectives.length) {
+    return (
+      <div className={className}>
+        <p className="whitespace-pre-wrap leading-relaxed">
+          {renderTextWithDirectives(normalizedText, normalizedDirectives)}
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -113,13 +90,45 @@ export function HighlightedText({ text, directives = [], className }: Highlighte
           code: ({ children }) => (
             <code className="rounded bg-white/10 px-1 py-0.5 text-[0.95em]">{children}</code>
           ),
-          text: ({ children }) => <>{renderHighlighted(String(children ?? ""))}</>,
         }}
       >
         {normalizedText}
       </ReactMarkdown>
     </div>
   );
+}
+
+function renderTextWithDirectives(value: string, directives: StepDirective[]): ReactNode[] {
+  let remaining = value;
+  const segments: ReactNode[] = [];
+
+  const pushText = (chunk: string) => {
+    if (!chunk) return;
+    segments.push(<span key={`${segments.length}-plain`}>{chunk}</span>);
+  };
+
+  directives.forEach((directive, index) => {
+    const snippet = directive.text?.trim();
+    if (!snippet) return;
+    const matchIndex = remaining.toLowerCase().indexOf(snippet.toLowerCase());
+    if (matchIndex === -1) return;
+    const before = remaining.slice(0, matchIndex);
+    pushText(before);
+    const matchText = remaining.slice(matchIndex, matchIndex + snippet.length);
+    const classNames = getDirectiveClass(directive.action);
+    segments.push(
+      <span
+        key={`${index}-highlight`}
+        className={`rounded px-1 ${classNames}`}
+        data-action={directive.action}
+      >
+        {matchText}
+      </span>
+    );
+    remaining = remaining.slice(matchIndex + snippet.length);
+  });
+  pushText(remaining);
+  return segments;
 }
 
 function parseInlineHighlightTags(value: string): {
