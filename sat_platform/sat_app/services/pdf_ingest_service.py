@@ -9,6 +9,7 @@ import json
 import threading
 import time
 import hashlib
+import re
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from collections import defaultdict, deque
 from pathlib import Path
@@ -62,6 +63,10 @@ MATH_SOP = (
     "(4) Build structure/equations before number-crunching. "
     "(5) Quick self-check: substitute back / sign & magnitude / domain constraints. "
     "(6) Takeaway rule for similar problems."
+)
+INLINE_UNDERLINE_RE = re.compile(
+    r"<(?:highlight|underline|u)>([\s\S]*?)</(?:highlight|underline|u)>",
+    re.IGNORECASE,
 )
 
 def _build_normalize_system_prompt(section_hint: str | None) -> str:
@@ -726,6 +731,39 @@ def _normalize_question_item(item: dict, *, job_id: int | None) -> dict | None:
         data["answer_schema"] = answer_schema
 
     data["passage"] = _normalize_passage(data.get("passage"))
+    # Canonicalize inline underline tags into structured decorations so all clients
+    # can render underlines consistently.
+    passage_obj = data.get("passage")
+    if isinstance(passage_obj, dict):
+        passage_text = passage_obj.get("content_text")
+        if isinstance(passage_text, str) and passage_text:
+            cleaned_passage, underline_decorations = _extract_inline_underlines(passage_text)
+            passage_obj["content_text"] = cleaned_passage
+            if underline_decorations:
+                meta = data.get("metadata")
+                if not isinstance(meta, dict):
+                    meta = {}
+                existing = meta.get("decorations")
+                merged: list[dict] = []
+                if isinstance(existing, list):
+                    merged.extend([e for e in existing if isinstance(e, dict)])
+                merged.extend(underline_decorations)
+                # Deduplicate exact same decoration triplets.
+                seen: set[tuple[str, str, str]] = set()
+                deduped: list[dict] = []
+                for entry in merged:
+                    target = str(entry.get("target") or "passage").strip().lower()
+                    text = str(entry.get("text") or "").strip()
+                    action = str(entry.get("action") or "underline").strip().lower()
+                    if not text:
+                        continue
+                    key = (target, text, action)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    deduped.append({"target": target, "text": text, "action": action})
+                meta["decorations"] = deduped
+                data["metadata"] = meta
     data["skill_tags"] = _sanitize_skill_tags(data.get("skill_tags"))
     # Fallback: ensure at least one valid skill tag to pass validation
     if not data["skill_tags"]:
@@ -962,6 +1000,23 @@ def _sanitize_highlights(raw_highlights: Any) -> List[dict]:
         if isinstance(h, dict) and h.get("text"):
             out.append({"text": str(h["text"])})
     return out
+
+
+def _extract_inline_underlines(text: str) -> tuple[str, list[dict]]:
+    if not text:
+        return text, []
+    decorations: list[dict] = []
+
+    def _repl(match: re.Match) -> str:
+        inner = (match.group(1) or "").strip()
+        if inner:
+            decorations.append(
+                {"target": "passage", "text": inner, "action": "underline"}
+            )
+        return match.group(1) or ""
+
+    cleaned = INLINE_UNDERLINE_RE.sub(_repl, text)
+    return cleaned, decorations
 
 
 def _coerce_section(raw_value: Any) -> str:

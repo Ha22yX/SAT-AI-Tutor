@@ -126,12 +126,17 @@ function parseInlineHighlightTags(value: string): {
   normalizedText: string;
   inlineDirectives: StepDirective[];
 } {
-  if (!value || !value.includes("<highlight>")) {
+  if (
+    !value ||
+    (!value.toLowerCase().includes("<highlight>") &&
+      !value.toLowerCase().includes("<underline>") &&
+      !value.toLowerCase().includes("<u>"))
+  ) {
     return { normalizedText: value, inlineDirectives: [] };
   }
   const directives: StepDirective[] = [];
   const normalizedText = value.replace(
-    /<highlight>([\s\S]*?)<\/highlight>/gi,
+    /<(?:highlight|underline|u)>([\s\S]*?)<\/(?:highlight|underline|u)>/gi,
     (_full, inner: string) => {
       const snippet = String(inner || "").trim();
       if (snippet) {
