@@ -38,7 +38,6 @@ import { env } from "@/lib/env";
 import { getClientToken } from "@/lib/auth-storage";
 import { useI18n } from "@/hooks/use-i18n";
 import { useAuthStore } from "@/stores/auth-store";
-import { getQuestionDecorations } from "@/lib/question-decorations";
 
 const API_BASE_URL = (env.apiBaseUrl || "").replace(/\/$/, "");
 
@@ -362,14 +361,9 @@ export function PracticeView({
   const currentProgress = progressKey ? questionProgress[progressKey] : undefined;
   const explanation = currentProgress?.explanation;
 
-  const questionDecorations = useMemo(
-    () => getQuestionDecorations(currentQuestion ?? null),
-    [currentQuestion]
-  );
-
   const combinedDirectives = useMemo(
-    () => [...questionDecorations, ...activeDirectives],
-    [questionDecorations, activeDirectives]
+    () => [...activeDirectives],
+    [activeDirectives]
   );
 
   const currentSectionLine = useMemo(() => {

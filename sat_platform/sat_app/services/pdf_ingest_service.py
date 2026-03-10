@@ -9,7 +9,6 @@ import json
 import threading
 import time
 import hashlib
-import re
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from collections import defaultdict, deque
 from pathlib import Path
@@ -64,10 +63,6 @@ MATH_SOP = (
     "(5) Quick self-check: substitute back / sign & magnitude / domain constraints. "
     "(6) Takeaway rule for similar problems."
 )
-INLINE_UNDERLINE_RE = re.compile(
-    r"<(?:highlight|underline|u)>([\s\S]*?)</(?:highlight|underline|u)>",
-    re.IGNORECASE,
-)
 
 def _build_normalize_system_prompt(section_hint: str | None) -> str:
     is_math = str(section_hint or "").lower().startswith("math")
@@ -77,8 +72,9 @@ def _build_normalize_system_prompt(section_hint: str | None) -> str:
             "Return exactly one JSON object with:\n"
             "- section: \"Math\"; sub_section optional/null.\n"
             "- passage: ONLY supporting prose; never copy figure/table text. Null if none. "
-            "If the original question has underlined passage fragments, wrap them exactly as "
-            "<highlight>underlined text</highlight> in passage.\n"
+            "If the source passage has underlined fragments, wrap only those fragments as "
+            "<underline>...</underline>. Use <highlight>...</highlight> only for true highlighted text, "
+            "not underlines.\n"
             "- stem_text: ONLY the interrogative part. Preserve LaTeX/advanced notation ($...$, \\(...\\), $$...$$, "
             "\\frac, \\sqrt, exponents, subscripts, inequalities, vectors, absolute value | |, summations, limits). Do not simplify.\n"
             "- choices: object with capital-letter keys. If the page shows no lettered options, set {} (treat as SPR/fill).\n"
@@ -92,15 +88,17 @@ def _build_normalize_system_prompt(section_hint: str | None) -> str:
             f"- skill_tags: up to TWO from: {SKILL_TAG_PROMPT}; [] if unsure (prefer Math domains). {MATH_DOMAIN_MAP}\n"
             "- metadata: include source_question_number if available; no legacy fields.\n"
             f"{MATH_ROUTE_RULES} {MATH_MC_RULES} {MATH_SPR_RULES}\n"
-            "Rules: Do NOT hallucinate. Do NOT copy figure data. Return JSON only."
+            "Rules: Do NOT hallucinate. Do NOT copy figure data. "
+            "Do NOT put underline/highlight spans into metadata; keep them inline in passage text with tags. "
+            "Return JSON only."
         )
     return (
         "You are an SAT Reading & Writing normalizer. Convert extracted snippets into the canonical JSON schema. "
         "Return exactly one JSON object with:\n"
         "- section: \"RW\"; sub_section optional/null.\n"
         "- passage: ONLY supporting prose; do NOT copy tables/figures or the question sentence. Null if none. "
-        "If the source contains underlined fragments in the passage, wrap them with "
-        "<highlight>underlined text</highlight> tags in passage.\n"
+        "If the passage contains underlined fragments, wrap those exact spans using "
+        "<underline>...</underline>. Use <highlight>...</highlight> only for highlighted text.\n"
         "- stem_text: ONLY the interrogative part (e.g., \"Which choice ...?\").\n"
         "- choices: object with capital-letter keys. If no valid lettered options exist, set {} and question_type must be \"fill\".\n"
         "- question_type: \"choice\" for MCQ else \"fill\".\n"
@@ -111,7 +109,9 @@ def _build_normalize_system_prompt(section_hint: str | None) -> str:
         "- difficulty_level 1-5 with difficulty_assessment; keep concise rationale.\n"
         f"- skill_tags: up to TWO from: {SKILL_TAG_PROMPT}; [] if unsure.\n"
         "- metadata: include source_question_number if available; no legacy fields.\n"
-        "Rules: Do NOT hallucinate. Do NOT copy figure contents. Return JSON only."
+        "Rules: Do NOT hallucinate. Do NOT copy figure contents. "
+        "Do NOT store underline/highlight spans in metadata; keep them inline in passage using tags. "
+        "Return JSON only."
     )
 
 
@@ -368,11 +368,6 @@ def _extract_coarse_questions(page: dict, *, job_id: int | None) -> List[dict]:
                                 "required": ["label", "text"],
                             },
                         },
-                        "highlights": {
-                            "type": "array",
-                            "items": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
-                            "default": [],
-                        },
                     },
                     "required": ["question_number", "prompt", "choices", "has_figure"],
                 },
@@ -390,7 +385,8 @@ def _extract_coarse_questions(page: dict, *, job_id: int | None) -> List[dict]:
         "absolute values |x|, vectors, summations, limits. Do NOT simplify, approximate, or strip symbols.\n"
         "- has_figure: true if chart/table/graph/image referenced; do NOT copy figure text.\n"
         f"- skill_tags: up to two from: {SKILL_TAG_PROMPT}; else [].\n"
-        "- highlights: underlined snippets as {{\"text\": \"...\"}} from passage.\n"
+        "- If source passage has underlined text, preserve it inline in `passage` as <underline>...</underline>. "
+        "Use <highlight>...</highlight> only for truly highlighted text.\n"
         "If no questions: {\"questions\": []}. No commentary."
     )
     user_prompt = f"You are examining page {page_index} of an SAT prep PDF. Return JSON matching:\n{schema_hint}\nStrict JSON only."
@@ -434,7 +430,6 @@ def _extract_coarse_questions(page: dict, *, job_id: int | None) -> List[dict]:
             item["page"] = page_index
             item["source_question_number"] = _extract_question_number(q)
             item["has_figure"] = bool(q.get("has_figure"))
-            item["highlights"] = _sanitize_highlights(q.get("highlights"))
             out.append(item)
     return out
 
@@ -731,41 +726,6 @@ def _normalize_question_item(item: dict, *, job_id: int | None) -> dict | None:
         data["answer_schema"] = answer_schema
 
     data["passage"] = _normalize_passage(data.get("passage"))
-    # Canonicalize inline underline tags into structured decorations so all clients
-    # can render underlines consistently.
-    passage_obj = data.get("passage")
-    if isinstance(passage_obj, dict):
-        passage_text = passage_obj.get("content_text")
-        if isinstance(passage_text, str) and passage_text:
-            tagged_passage, underline_decorations = _extract_inline_underlines(passage_text)
-            # Keep inline tags in stored passage text so frontend can render directly from
-            # <highlight>/<underline>/<u> markers without depending on metadata.
-            passage_obj["content_text"] = tagged_passage
-            if underline_decorations:
-                meta = data.get("metadata")
-                if not isinstance(meta, dict):
-                    meta = {}
-                existing = meta.get("decorations")
-                merged: list[dict] = []
-                if isinstance(existing, list):
-                    merged.extend([e for e in existing if isinstance(e, dict)])
-                merged.extend(underline_decorations)
-                # Deduplicate exact same decoration triplets.
-                seen: set[tuple[str, str, str]] = set()
-                deduped: list[dict] = []
-                for entry in merged:
-                    target = str(entry.get("target") or "passage").strip().lower()
-                    text = str(entry.get("text") or "").strip()
-                    action = str(entry.get("action") or "underline").strip().lower()
-                    if not text:
-                        continue
-                    key = (target, text, action)
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    deduped.append({"target": target, "text": text, "action": action})
-                meta["decorations"] = deduped
-                data["metadata"] = meta
     data["skill_tags"] = _sanitize_skill_tags(data.get("skill_tags"))
     # Fallback: ensure at least one valid skill tag to pass validation
     if not data["skill_tags"]:
@@ -994,35 +954,6 @@ def _sanitize_skill_tags(raw_tags: Any) -> List[str]:
     return []
 
 
-def _sanitize_highlights(raw_highlights: Any) -> List[dict]:
-    if not isinstance(raw_highlights, list):
-        return []
-    out: List[dict] = []
-    for h in raw_highlights:
-        if isinstance(h, dict) and h.get("text"):
-            out.append({"text": str(h["text"])})
-    return out
-
-
-def _extract_inline_underlines(text: str) -> tuple[str, list[dict]]:
-    if not text:
-        return text, []
-    decorations: list[dict] = []
-
-    def _repl(match: re.Match) -> str:
-        inner = (match.group(1) or "").strip()
-        if inner:
-            decorations.append(
-                {"target": "passage", "text": inner, "action": "underline"}
-            )
-            # Canonicalize all supported underline tag variants to <highlight>.
-            return f"<highlight>{inner}</highlight>"
-        return ""
-
-    tagged = INLINE_UNDERLINE_RE.sub(_repl, text)
-    return tagged, decorations
-
-
 def _coerce_section(raw_value: Any) -> str:
     if not raw_value:
         return "RW"
@@ -1127,17 +1058,6 @@ def _request_page_questions(
                                 "required": ["label", "text"],
                             },
                         },
-                        "highlights": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "text": {"type": "string"},
-                                },
-                                "required": ["text"],
-                            },
-                            "default": [],
-                        },
                     },
                     "required": ["question_number", "prompt", "choices", "has_figure"],
                 },
@@ -1156,7 +1076,8 @@ def _request_page_questions(
         "- `has_figure`: true if the question references a chart, table, graph, map, image or any visual data (including ASCII tables). When true, DO NOT copy the figure contents into `passage` or `prompt`; the platform will display the cropped figure separately.\n"
         "- `skill_tags`: choose up to two tags from this canonical list only: "
         f"{SKILL_TAG_PROMPT}. If none apply, use an empty array.\n"
-        "- `highlights`: SAT passages occasionally contain underlined phrases. Capture ONLY those passage snippets (no other targets) as {\"text\": \"exact underlined substring\"}. Always pull from the passage text.\n"
+        "- If SAT passage text is underlined, preserve those exact spans inline in `passage` using <underline>...</underline>. "
+        "Use <highlight>...</highlight> only for truly highlighted text.\n"
         "If a page has zero questions, respond with {\"questions\": []}. Never include commentary, markdown, explanations, or figure text."
     )
     user_prompt = (
@@ -1201,7 +1122,6 @@ def _request_page_questions(
             entry = dict(q)
             entry["page"] = page_index
             entry["has_figure"] = bool(entry.get("has_figure"))
-            entry["highlights"] = _sanitize_highlights(entry.get("highlights"))
             source_number = _extract_question_number(entry)
             if source_number is not None:
                 entry["source_question_number"] = source_number
@@ -1346,13 +1266,6 @@ def _normalize_question(
         expected_time = difficulty_assessment.get("expected_time_sec")
         if expected_time and not normalized.get("estimated_time_sec"):
             normalized["estimated_time_sec"] = int(expected_time)
-    decorations = _extract_decorations(question_payload)
-    if decorations:
-        metadata = normalized.get("metadata") or {}
-        if not isinstance(metadata, dict):
-            metadata = {}
-        metadata["decorations"] = decorations
-        normalized["metadata"] = metadata
     solver_result = None
     correct_answer = normalized.get("correct_answer") or {}
     correct_value = correct_answer.get("value") if isinstance(correct_answer, dict) else None
@@ -1407,36 +1320,6 @@ def _attach_precomputed_explanations(payload: dict) -> None:
     """
     return
 
-
-def _sanitize_skill_tags(raw_tags: Any) -> List[str]:
-    if isinstance(raw_tags, list):
-        return canonicalize_tags(raw_tags, limit=2)
-    return []
-
-
-def _sanitize_highlights(raw_highlights: Any) -> List[dict]:
-    if not isinstance(raw_highlights, list):
-        return []
-    cleaned: List[dict] = []
-    for entry in raw_highlights:
-        if not isinstance(entry, dict):
-            continue
-        text = entry.get("text")
-        if not text:
-            continue
-        cleaned.append({"text": str(text)})
-    return cleaned
-
-
-def _extract_decorations(question_payload: dict) -> List[dict]:
-    highlights = _sanitize_highlights(question_payload.get("highlights"))
-    decorations: List[dict] = []
-    for highlight in highlights:
-        snippet = (highlight.get("text") or "").strip()
-        if not snippet:
-            continue
-        decorations.append({"target": "passage", "text": snippet, "action": "underline"})
-    return decorations
 
 def _normalize_choices(raw_choices: Any) -> Dict[str, str]:
     if isinstance(raw_choices, dict):

@@ -51,8 +51,6 @@ import { env } from "@/lib/env";
 import { getClientToken } from "@/lib/auth-storage";
 import { useI18n } from "@/hooks/use-i18n";
 import { listMembershipOrdersAdmin, decideMembershipOrder } from "@/services/membership";
-import type { StepDirective } from "@/components/practice/explanation-viewer";
-import { getQuestionDecorations } from "@/lib/question-decorations";
 
 const PAGE_SIZE = 20;
 const DETAIL_PAGE_SIZE = 20;
@@ -883,11 +881,6 @@ function QuestionEditor({
   const [figurePreviewUrl, setFigurePreviewUrl] = useState<string | null>(null);
   const [figurePageInput, setFigurePageInput] = useState("");
   const primaryFigure = question.figures?.[0];
-  const [decorations, setDecorations] = useState<StepDirective[]>(
-    parseDecorationsFromMetadata(question.metadata)
-  );
-  const [highlightModal, setHighlightModal] = useState<HighlightModalState | null>(null);
-  const [highlightError, setHighlightError] = useState<string | null>(null);
   const [sourcePreview, setSourcePreview] = useState<FigureSource | null>(null);
   const [sourcePreviewLoading, setSourcePreviewLoading] = useState(false);
   const [sourcePreviewError, setSourcePreviewError] = useState<string | null>(null);
@@ -962,9 +955,6 @@ function QuestionEditor({
     );
     setFigureModal(null);
     setFigureError(null);
-    setDecorations(parseDecorationsFromMetadata(question.metadata));
-    setHighlightModal(null);
-    setHighlightError(null);
     if (question.source?.id) {
       loadSourcePreview();
     } else {
@@ -973,19 +963,6 @@ function QuestionEditor({
       setSourcePreviewLoading(false);
     }
   }, [question, buildMediaUrl, loadSourcePreview]);
-
-  useEffect(() => {
-    if (!metadataRaw.trim()) {
-      setDecorations([]);
-      return;
-    }
-    try {
-      const parsed = JSON.parse(metadataRaw);
-      setDecorations(parseDecorationsFromMetadata(parsed));
-    } catch {
-      // Ignore invalid JSON to avoid interrupting manual edits.
-    }
-  }, [metadataRaw]);
 
   const computeSelectionFromFigure = useCallback(
     (source?: FigureSource) => {
@@ -1147,69 +1124,6 @@ function QuestionEditor({
       setFigureDeleting(false);
     }
   }, [primaryFigure, question.id, queryClient]);
-
-  const updateDecorations = useCallback((next: StepDirective[]) => {
-    setDecorations(next);
-    setMetadataRaw((prev) => {
-      let parsed: Record<string, unknown>;
-      try {
-        parsed = prev.trim() ? JSON.parse(prev) : {};
-      } catch {
-        parsed = {};
-      }
-      parsed.decorations = sanitizeDecorationsForMetadata(next);
-      return JSON.stringify(parsed, null, 2);
-    });
-  }, []);
-
-  const openHighlightModal = useCallback(async () => {
-    if (!question.source?.id) {
-      setHighlightError("Link this question to a PDF source before annotating underlines.");
-      return;
-    }
-    setHighlightError(null);
-    setHighlightModal({
-      questionId: question.id,
-      loading: true,
-    });
-    try {
-      const source = await fetchQuestionFigureSource(
-        question.id,
-        question.source_page ?? undefined
-      );
-      setHighlightModal((prev) =>
-        prev && prev.questionId === question.id
-          ? { ...prev, source, loading: false, page: source.page }
-          : prev
-      );
-    } catch (err) {
-      setHighlightError(extractErrorMessage(err, "Failed to load PDF page"));
-      setHighlightModal((prev) =>
-        prev && prev.questionId === question.id ? { ...prev, loading: false } : prev
-      );
-    }
-  }, [question.id, question.source?.id, question.source_page]);
-
-  const closeHighlightModal = useCallback(() => {
-    setHighlightModal(null);
-    setHighlightError(null);
-  }, []);
-
-  const handleApplyDecorations = useCallback(
-    (next: StepDirective[]) => {
-      updateDecorations(next);
-      setHighlightModal(null);
-      setHighlightError(null);
-    },
-    [updateDecorations]
-  );
-
-  const handleRemoveDecoration = useCallback(
-    (index: number) => {
-      updateDecorations(decorations.filter((_, idx) => idx !== index));
-    },
-    [decorations, updateDecorations]
-  );
 
   const choiceKeys = useMemo(() => {
     const keys = Object.keys(choices);
@@ -1558,59 +1472,6 @@ function QuestionEditor({
         {figureError && !figureModal && <p className="text-xs text-red-400">{figureError}</p>}
       </section>
 
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-white/50">Manual underlines</p>
-            <p className="text-[13px] text-white/60">仅支持 Passage 段落中的下划线。</p>
-          </div>
-          <button
-            type="button"
-            className="rounded-xl border border-white/30 px-4 py-2 text-sm font-semibold text-white/80 disabled:opacity-40"
-            onClick={openHighlightModal}
-            disabled={!question.source?.id}
-          >
-            {decorations.length ? "Edit underlines" : "Annotate underlines"}
-          </button>
-        </div>
-        {highlightError && <p className="text-xs text-red-400">{highlightError}</p>}
-        {!question.source?.id && (
-          <p className="text-xs text-amber-200">
-            Link this question to a PDF source/page to enable underline annotation.
-          </p>
-        )}
-        {decorations.length ? (
-          <ul className="space-y-2">
-            {decorations.map((entry, index) => (
-              <li
-                key={`${entry.target}-${entry.choice_id ?? "0"}-${index}`}
-                className="flex items-start justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
-              >
-                <div className="text-sm text-white/80">
-                  <p className="font-semibold text-white">{entry.text}</p>
-                  <p className="text-xs text-white/50">
-                    Target: {entry.target === "stem" ? "Question" : entry.target}
-                    {entry.choice_id ? ` · Choice ${entry.choice_id}` : ""}
-                    {entry.action ? ` · ${entry.action}` : ""}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="rounded-full border border-white/20 px-3 py-1 text-xs text-white/70 hover:text-white"
-                  onClick={() => handleRemoveDecoration(index)}
-                >
-                  Remove
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-white/60">
-            No manual highlights recorded yet. Use the annotate tool to add them.
-          </p>
-        )}
-      </section>
-
       {error ? (
         <p className="text-sm text-red-400">
           {extractErrorMessage(error, "Failed to update question")}
@@ -1742,234 +1603,7 @@ function QuestionEditor({
         </div>
       </div>
     )}
-    {highlightModal && (
-      <HighlightAnnotationModal
-        question={question}
-        stemText={stemText}
-        passageText={passageText}
-        decorations={decorations}
-        modal={highlightModal}
-        onClose={closeHighlightModal}
-        onSave={handleApplyDecorations}
-      />
-    )}
     </>
-  );
-}
-
-type HighlightAnnotationModalProps = {
-  question: AdminQuestion;
-  stemText: string;
-  passageText: string;
-  decorations: StepDirective[];
-  modal: HighlightModalState;
-  onClose: () => void;
-  onSave: (decorations: StepDirective[]) => void;
-};
-
-function HighlightAnnotationModal({
-  question,
-  stemText,
-  passageText,
-  decorations,
-  modal,
-  onClose,
-  onSave,
-}: HighlightAnnotationModalProps) {
-  const { t } = useI18n();
-  const [draft, setDraft] = useState<StepDirective[]>(decorations);
-  const [pendingText, setPendingText] = useState("");
-  const [localError, setLocalError] = useState<string | null>(null);
-  const pageLabel = question.source_page ?? question.page ?? "—";
-
-  useEffect(() => {
-    setDraft(decorations);
-  }, [decorations]);
-
-  const handleTextSelection = useCallback((event: React.SyntheticEvent<HTMLTextAreaElement>) => {
-    const el = event.currentTarget;
-    const start = el.selectionStart ?? 0;
-    const end = el.selectionEnd ?? 0;
-    if (start === end) return;
-    const snippet = el.value.slice(start, end).trim();
-    if (!snippet) return;
-    setPendingText(snippet);
-    setLocalError(null);
-  }, []);
-
-  const handleAddDecoration = useCallback(() => {
-    const snippet = pendingText.trim();
-    if (!snippet) {
-      setLocalError("请先在文本里选择需要高亮的内容。");
-      return;
-    }
-    const entry: StepDirective = {
-      target: "passage",
-      text: snippet,
-      action: "underline",
-    };
-    setDraft((prev) => [...prev, entry]);
-    setPendingText("");
-    setLocalError(null);
-  }, [pendingText]);
-
-  const handleRemoveDraft = useCallback((index: number) => {
-    setDraft((prev) => prev.filter((_, idx) => idx !== index));
-  }, []);
-
-  const hasChanges = useMemo(() => {
-    if (draft.length !== decorations.length) return true;
-    return draft.some((entry, index) => {
-      const existing = decorations[index];
-      return (
-        entry.target !== existing.target ||
-        entry.text !== existing.text ||
-        entry.action !== existing.action
-      );
-    });
-  }, [draft, decorations]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-      <div className="flex h-full w-full max-w-6xl flex-col rounded-2xl bg-[#050E1F] shadow-2xl max-h-[95vh]">
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
-          <div>
-            <p className="text-base font-semibold text-white">
-              Manual underline · {question.question_uid || `Question #${question.id}`}
-            </p>
-            <p className="text-xs text-white/60">Page {pageLabel}</p>
-          </div>
-          <button
-            className="rounded-full border border-white/20 px-3 py-1 text-xs text-white/70 hover:text-white"
-            onClick={onClose}
-          >
-            Close
-          </button>
-        </div>
-        <div className="flex-1 space-y-4 overflow-y-auto p-5">
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-white">Linked PDF page preview</p>
-              <p className="text-xs text-white/60">
-                来自题目关联的 PDF 页（不能切换其他页）。
-              </p>
-              <div className="rounded-2xl border border-white/10 bg-black/40 p-3">
-                {modal.loading ? (
-                  <div className="flex h-[320px] items-center justify-center text-sm text-white/60">
-                    Loading page preview...
-                  </div>
-                ) : modal.source ? (
-                  <img
-                    src={modal.source.image}
-                    alt="PDF page preview"
-                    className="max-h-[520px] w-full rounded-xl object-contain"
-                  />
-                ) : (
-                  <div className="flex h-[320px] items-center justify-center text-sm text-rose-200">
-                    Unable to load PDF preview.
-                  </div>
-                )}
-              </div>
-            </div>
-            <div>
-              <div>
-                <p className="text-sm font-semibold text-white">Select passage text</p>
-                <p className="text-xs text-white/60">仅支持 Passage 中的下划线。</p>
-              </div>
-              <label className="text-xs uppercase tracking-wide text-white/40">
-                Passage
-                <textarea
-                  className="mt-1 h-48 w-full rounded-2xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white"
-                  value={passageText}
-                  readOnly
-                  onSelect={handleTextSelection}
-                />
-              </label>
-            </div>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-[1.1fr_minmax(0,1fr)]">
-            <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
-              <p className="text-sm font-semibold text-white">New underline</p>
-              <p className="text-xs text-white/60">
-                SAT official passages只会在原文中以下划线标注重点。请在上方 Passage 文本中拖拽
-                选择后点击“Add underline”。
-              </p>
-              <label className="text-xs uppercase tracking-wide text-white/50">
-                Selected text
-                <textarea
-                  className="mt-1 w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-white"
-                  rows={3}
-                  value={pendingText}
-                  onChange={(e) => setPendingText(e.target.value)}
-                  placeholder="Select text above or paste content here"
-                />
-              </label>
-              {localError && <p className="text-xs text-red-400">{localError}</p>}
-              <button
-                type="button"
-                className="rounded-xl border border-white/20 px-3 py-2 text-sm font-semibold text-white/80"
-                onClick={handleAddDecoration}
-              >
-                Add underline
-              </button>
-              <p className="text-xs text-white/50">
-                记得在关闭窗口后点击“Save question”保存最终更改。
-              </p>
-            </div>
-            <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
-              <p className="text-sm font-semibold text-white">
-                Highlights ({draft.length})
-              </p>
-              {draft.length ? (
-                <ul className="space-y-2 text-sm text-white/80">
-                  {draft.map((entry, idx) => (
-                    <li
-                      key={`${entry.target}-${entry.choice_id ?? "none"}-${idx}`}
-                      className="rounded-xl border border-white/10 bg-black/30 p-3"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="font-semibold text-white">{entry.text}</p>
-                          <p className="text-xs text-white/50">
-                            {entry.target === "stem" ? "Question" : entry.target}
-                            {entry.choice_id ? ` · Choice ${entry.choice_id}` : ""}
-                            {entry.action ? ` · ${entry.action}` : ""}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          className="rounded-full border border-white/20 px-3 py-1 text-xs text-white/70 hover:text-white"
-                          onClick={() => handleRemoveDraft(idx)}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-xs text-white/60">No annotations yet.</p>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-wrap justify-end gap-3 border-t border-white/10 px-5 py-4">
-          <button
-            className="rounded-xl border border-white/20 px-4 py-2 text-sm text-white/80"
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <button
-            className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#050E1F] disabled:opacity-50"
-            onClick={() => onSave(draft)}
-            disabled={!hasChanges}
-          >
-            Save highlights
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -3225,31 +2859,4 @@ type QuestionFigureModalState = {
   loading: boolean;
   page?: number;
 };
-
-type HighlightModalState = {
-  questionId: number;
-  source?: FigureSource;
-  loading: boolean;
-  page?: number;
-};
-
-function parseDecorationsFromMetadata(
-  metadata: Record<string, unknown> | null | undefined
-): StepDirective[] {
-  if (!metadata || typeof metadata !== "object") {
-    return [];
-  }
-  return getQuestionDecorations({ metadata } as { metadata: Record<string, unknown> });
-}
-
-function sanitizeDecorationsForMetadata(next: StepDirective[]): Array<Record<string, unknown>> {
-  return next.map((entry) => {
-    const payload: Record<string, unknown> = {
-      target: "passage",
-      text: entry.text,
-    };
-    payload.action = "underline";
-    return payload;
-  });
-}
 

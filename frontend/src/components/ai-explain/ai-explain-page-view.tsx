@@ -26,7 +26,6 @@ import type { SessionQuestion } from "@/types/session";
 import Link from "next/link";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AiExplainQuota, MembershipStatus } from "@/types/auth";
-import { getQuestionDecorations } from "@/lib/question-decorations";
 
 const REFRESH_INTERVAL = 1000 * 30;
 
@@ -281,13 +280,9 @@ function ExplainDetailPanel({
   const userValue = meta.user_answer?.value;
   const correctValue = meta.correct_answer?.value;
 
-  const questionDecorations = useMemo(
-    () => getQuestionDecorations(question),
-    [question]
-  );
   const combinedDirectives = useMemo(
-    () => [...questionDecorations, ...activeDirectives],
-    [questionDecorations, activeDirectives]
+    () => [...activeDirectives],
+    [activeDirectives]
   );
 
   const sectionLabel = [meta.section, meta.sub_section].filter(Boolean).join(" · ");

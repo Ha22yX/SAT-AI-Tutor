@@ -145,14 +145,15 @@ function parseInlineHighlightTags(value: string): {
   }
   const directives: StepDirective[] = [];
   const normalizedText = value.replace(
-    /<(?:highlight|underline|u)>([\s\S]*?)<\/(?:highlight|underline|u)>/gi,
-    (_full, inner: string) => {
+    /<(highlight|underline|u)>([\s\S]*?)<\/\1>/gi,
+    (_full, rawTag: string, inner: string) => {
       const snippet = String(inner || "").trim();
       if (snippet) {
+        const tag = rawTag.toLowerCase();
         directives.push({
           target: "passage",
           text: snippet,
-          action: "underline",
+          action: tag === "highlight" ? "highlight" : "underline",
         });
       }
       return inner || "";
