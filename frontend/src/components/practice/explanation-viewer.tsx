@@ -193,11 +193,12 @@ function splitTextByDirectives(
   for (const directive of directives) {
     const snippet = directive.text?.trim();
     if (!snippet) continue;
-    const hit = working.toLowerCase().indexOf(snippet.toLowerCase());
-    if (hit < 0) continue;
+    const range = findLooselyMatchedRange(working, snippet);
+    if (!range) continue;
+    const [localStart, localEnd] = range;
 
-    const absoluteStart = cursor + hit;
-    const absoluteEnd = absoluteStart + snippet.length;
+    const absoluteStart = cursor + localStart;
+    const absoluteEnd = cursor + localEnd;
     if (absoluteStart > cursor) {
       out.push({ text: value.slice(cursor, absoluteStart) });
     }
@@ -214,6 +215,73 @@ function splitTextByDirectives(
   }
 
   return out.length ? out : [{ text: value }];
+}
+
+function findLooselyMatchedRange(
+  source: string,
+  snippet: string
+): [number, number] | null {
+  const normalizedSource = normalizeForLooseMatch(source);
+  const normalizedSnippet = normalizeForLooseMatch(snippet);
+  if (!normalizedSnippet.value) {
+    return null;
+  }
+  const hit = normalizedSource.value.indexOf(normalizedSnippet.value);
+  if (hit < 0) {
+    return null;
+  }
+  const startOriginal = normalizedSource.map[hit];
+  const endMapIndex = hit + normalizedSnippet.value.length - 1;
+  const endOriginalInclusive = normalizedSource.map[endMapIndex];
+  if (startOriginal == null || endOriginalInclusive == null) {
+    return null;
+  }
+  return [startOriginal, endOriginalInclusive + 1];
+}
+
+function normalizeForLooseMatch(input: string): { value: string; map: number[] } {
+  let value = "";
+  const map: number[] = [];
+  let pendingSpace = false;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const ch = input[i];
+    const normalized = normalizeChar(ch);
+    if (!normalized) continue;
+
+    if (normalized === " ") {
+      pendingSpace = value.length > 0;
+      continue;
+    }
+
+    if (pendingSpace) {
+      value += " ";
+      map.push(i);
+      pendingSpace = false;
+    }
+    value += normalized;
+    map.push(i);
+  }
+
+  return { value: value.trim(), map: trimMapByValue(value, map) };
+}
+
+function trimMapByValue(value: string, map: number[]): number[] {
+  if (!value.length) return [];
+  let start = 0;
+  let end = value.length - 1;
+  while (start <= end && value[start] === " ") start += 1;
+  while (end >= start && value[end] === " ") end -= 1;
+  return map.slice(start, end + 1);
+}
+
+function normalizeChar(ch: string): string {
+  const lower = ch.toLowerCase();
+  if (/\s/.test(lower)) return " ";
+  if (lower === "’" || lower === "‘" || lower === "`") return "'";
+  if (lower === "“" || lower === "”") return '"';
+  if (lower === "–" || lower === "—") return "-";
+  return lower;
 }
 
 function MathText({ text, className }: { text?: string; className?: string }) {
