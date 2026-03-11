@@ -487,6 +487,40 @@ def _enrich_item(item: dict, *, job_id: int | None) -> dict | None:
     else:
         current_app.logger.warning("Solve failed or empty", extra=ctx)
 
+    # Review extraction accuracy: send full normalized payload + source page image
+    # back to AI for a consistency check against the original PDF page.
+    review_enabled = bool(current_app.config.get("AI_EXTRACTION_REVIEW_ENABLE", True))
+    if review_enabled:
+        current_app.logger.info("Review start", extra=ctx)
+        review = _review_extraction_quality(
+            normalized_payload=normalized,
+            raw_item=item,
+            job_id=job_id,
+        )
+        if review:
+            meta = normalized.get("metadata") or {}
+            if not isinstance(meta, dict):
+                meta = {}
+            meta["extraction_review"] = review
+            normalized["metadata"] = meta
+            item["status"] = "reviewed"
+            current_app.logger.info(
+                "Review done",
+                extra={
+                    **ctx,
+                    "accepted": bool(review.get("accepted")),
+                    "confidence": review.get("confidence"),
+                },
+            )
+            # Optional strict mode: reject items AI review flags as inaccurate.
+            if bool(current_app.config.get("AI_EXTRACTION_REVIEW_STRICT", False)) and not bool(
+                review.get("accepted")
+            ):
+                current_app.logger.warning("Review rejected item in strict mode", extra=ctx)
+                return None
+        else:
+            current_app.logger.warning("Review returned empty", extra=ctx)
+
     # Explain: generate during ingest (not deferred to publish). Only honor a hard disable flag.
     has_fig = bool(normalized.get("has_figure"))
     choice_figs = normalized.get("choice_figure_keys") or []
@@ -636,6 +670,97 @@ def _enrich_item(item: dict, *, job_id: int | None) -> dict | None:
     if coarse_uid:
         payload["coarse_uid"] = coarse_uid
     return payload
+
+
+def _review_extraction_quality(
+    *,
+    normalized_payload: dict,
+    raw_item: dict,
+    job_id: int | None,
+) -> dict | None:
+    review_schema = {
+        "type": "object",
+        "properties": {
+            "accepted": {"type": "boolean"},
+            "confidence": {"type": "number"},
+            "issues": {"type": "array", "items": {"type": "string"}},
+            "fix_suggestions": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["accepted", "confidence", "issues", "fix_suggestions"],
+    }
+    schema_hint = json.dumps(review_schema, ensure_ascii=False, indent=2)
+    system_prompt = (
+        "You are an SAT extraction QA reviewer. Compare structured question JSON against the original PDF page image "
+        "and decide whether extraction is accurate. Check passage/stem boundaries, choice text, figure dependency, "
+        "answer format consistency, and whether obvious content was missed or hallucinated. "
+        "Return STRICT JSON only."
+    )
+    review_input = {
+        "normalized_question": normalized_payload,
+        "raw_extracted_item": {
+            "section": raw_item.get("section"),
+            "passage": raw_item.get("passage"),
+            "prompt": raw_item.get("prompt"),
+            "choices": raw_item.get("choices"),
+            "has_figure": raw_item.get("has_figure"),
+            "source_question_number": _extract_question_number(raw_item),
+            "page": raw_item.get("page") or raw_item.get("page_index"),
+        },
+    }
+    user_content: List[Dict[str, Any]] = [
+        {
+            "type": "input_text",
+            "text": "Return JSON matching schema:\n"
+            + schema_hint
+            + "\nData to review:\n"
+            + json.dumps(review_input, ensure_ascii=False),
+        }
+    ]
+    page_image_b64 = raw_item.get("page_image_b64")
+    if isinstance(page_image_b64, str) and page_image_b64:
+        user_content.append({"type": "input_image", "image_url": page_image_b64})
+
+    payload = {
+        "model": current_app.config.get(
+            "AI_PDF_VISION_MODEL",
+            current_app.config.get("AI_MODEL_NAME", "gpt-5.4"),
+        ),
+        "input": [
+            {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+            {"role": "user", "content": user_content},
+        ],
+        "temperature": 0.1,
+    }
+    try:
+        raw = _call_responses_api(
+            payload,
+            purpose="question_extraction_review",
+            job_id=job_id,
+            ctx={
+                "stage": "review",
+                "page": raw_item.get("page") or raw_item.get("page_index"),
+                "qnum": _extract_question_number(raw_item),
+            },
+        )
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            return None
+        accepted = bool(data.get("accepted"))
+        try:
+            confidence = float(data.get("confidence", 0.0))
+        except Exception:
+            confidence = 0.0
+        issues = data.get("issues") if isinstance(data.get("issues"), list) else []
+        fixes = data.get("fix_suggestions") if isinstance(data.get("fix_suggestions"), list) else []
+        return {
+            "accepted": accepted,
+            "confidence": max(0.0, min(1.0, confidence)),
+            "issues": [str(x) for x in issues if str(x).strip()],
+            "fix_suggestions": [str(x) for x in fixes if str(x).strip()],
+        }
+    except Exception as exc:
+        current_app.logger.warning("Extraction review failed: %s", exc)
+        return None
 
 
 def _normalize_question_item(item: dict, *, job_id: int | None) -> dict | None:

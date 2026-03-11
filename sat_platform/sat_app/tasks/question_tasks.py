@@ -9,12 +9,14 @@ from datetime import datetime, timezone
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm.exc import ObjectDeletedError
+from flask import current_app
 
 from ..extensions import db
 from ..models import QuestionImportJob, QuestionDraft, Question
+from ..schemas.question_schema import QuestionCreateSchema
 from ..services.job_events import job_event_broker
 from ..utils.file_parser import parse_file
-from ..services import ai_question_parser, pdf_ingest_service
+from ..services import ai_question_parser, pdf_ingest_service, question_service, question_explanation_service
 
 
 def _flush_with_retry(attempts: int = 5, base_delay: float = 0.2) -> None:
@@ -30,7 +32,10 @@ def _flush_with_retry(attempts: int = 5, base_delay: float = 0.2) -> None:
     db.session.flush()
 
 
-def _save_draft(job: QuestionImportJob, payload: dict) -> None:
+question_create_schema = QuestionCreateSchema()
+
+
+def _save_draft(job: QuestionImportJob, payload: dict) -> QuestionDraft:
     """Upsert draft by coarse_uid to avoid duplicates on resume."""
     coarse_uid = payload.get("coarse_uid")
     if coarse_uid:
@@ -42,7 +47,7 @@ def _save_draft(job: QuestionImportJob, payload: dict) -> None:
                     db.session.add(draft)
                     _flush_with_retry()
                     job_event_broker.publish({"type": "draft", "payload": draft.serialize()})
-                    return
+                    return draft
             except Exception:
                 continue
     draft = QuestionDraft(job_id=job.id, payload=payload, source_id=job.source_id)
@@ -52,6 +57,86 @@ def _save_draft(job: QuestionImportJob, payload: dict) -> None:
     job_event_broker.publish({"type": "draft", "payload": draft.serialize()})
     _flush_with_retry()
     job_event_broker.publish({"type": "draft", "payload": draft.serialize()})
+    return draft
+
+
+def _extract_published_question_id(draft: QuestionDraft) -> int | None:
+    payload = draft.payload if isinstance(draft.payload, dict) else {}
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    raw_value = metadata.get("published_question_id")
+    try:
+        qid = int(raw_value)
+        return qid if qid > 0 else None
+    except Exception:
+        return None
+
+
+def _is_auto_publish_candidate(payload: dict) -> bool:
+    if bool(payload.get("has_figure")):
+        return False
+    choice_figure_keys = payload.get("choice_figure_keys") or []
+    if isinstance(choice_figure_keys, list) and len(choice_figure_keys) > 0:
+        return False
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        return False
+    review = metadata.get("extraction_review")
+    if not isinstance(review, dict):
+        return False
+    if not bool(review.get("accepted")):
+        return False
+    issues = review.get("issues")
+    if isinstance(issues, list) and any(str(issue).strip() for issue in issues):
+        return False
+    return True
+
+
+def _auto_publish_draft_if_eligible(job: QuestionImportJob, draft: QuestionDraft) -> bool:
+    payload = draft.payload if isinstance(draft.payload, dict) else {}
+    if _extract_published_question_id(draft):
+        return True
+    if not _is_auto_publish_candidate(payload):
+        return False
+    try:
+        question_payload = dict(payload)
+        question_payload.pop("coarse_uid", None)
+        question_payload.pop("status", None)
+        precomputed_explanations = None
+        metadata = question_payload.get("metadata")
+        if isinstance(metadata, dict):
+            precomputed_explanations = metadata.get("ai_explanations")
+        question_payload = question_create_schema.load(question_payload)
+        question_payload.pop("choice_figure_keys", None)
+        if draft.source_id and not question_payload.get("source_id"):
+            question_payload["source_id"] = draft.source_id
+        question = question_service.create_question(question_payload, commit=False)
+        qmeta = question.metadata_json if isinstance(question.metadata_json, dict) else {}
+        qmeta["coarse_draft_link"] = {
+            "draft_id": draft.id,
+            "job_id": draft.job_id,
+            "coarse_uid": payload.get("coarse_uid"),
+        }
+        question.metadata_json = qmeta
+        if precomputed_explanations:
+            question_explanation_service.store_precomputed_explanations(question, precomputed_explanations)
+        draft_meta = payload.get("metadata")
+        if not isinstance(draft_meta, dict):
+            draft_meta = {}
+        draft_meta["published_question_id"] = question.id
+        draft_meta["published_at"] = datetime.now(timezone.utc).isoformat()
+        payload["metadata"] = draft_meta
+        draft.payload = payload
+        draft.is_verified = True
+        db.session.add(draft)
+        _commit_with_retry()
+        job_event_broker.publish({"type": "draft_removed", "payload": {"id": draft.id, "job_id": draft.job_id}})
+        return True
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.warning("Auto-publish skipped for draft %s: %s", getattr(draft, "id", "?"), exc)
+        return False
 
 
 def _commit_with_retry(attempts: int = 5, base_delay: float = 0.2) -> None:
@@ -204,7 +289,8 @@ def process_job(job_id: int, cancel_event=None) -> QuestionImportJob:
             def _on_question(payload: dict) -> None:
                 if not _job_exists(job_id_int):
                     raise ObjectDeletedError(f"Job {job_id_int} no longer exists; aborting ingest.", None, None)
-                _save_draft(job, payload)
+                draft = _save_draft(job, payload)
+                _auto_publish_draft_if_eligible(job, draft)
                 # Recompute from DB to avoid drift if any draft was removed/added outside the session.
                 job.parsed_questions = db.session.query(QuestionDraft).filter_by(job_id=job_id_int).count()
                 _commit_with_retry()
@@ -231,7 +317,8 @@ def process_job(job_id: int, cancel_event=None) -> QuestionImportJob:
             job.total_blocks = len(blocks)
             for index, block in enumerate(blocks, start=1):
                 payload = ai_question_parser.parse_raw_question_block(block)
-                _save_draft(job, payload)
+                draft = _save_draft(job, payload)
+                _auto_publish_draft_if_eligible(job, draft)
                 job.parsed_questions += 1
                 job.current_page = index
                 job.status_message = f"Normalized block {index}/{len(blocks)}"
