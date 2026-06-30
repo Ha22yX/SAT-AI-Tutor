@@ -1,86 +1,264 @@
 # SAT AI Tutor
 
-Flask + Next.js platform for adaptive practice, AI explanations, PDF parsing, and question generation.
+[中文说明](README.zh-CN.md)
 
-## Quick start
-1) Python/Deps
+![SAT AI Tutor learning dashboard](docs/images/sat-ai-tutor-dashboard.png)
+
+SAT AI Tutor is a full-stack AI learning platform for SAT preparation. It combines adaptive practice, daily study planning, detailed AI explanations, visual explanation playback, PDF question ingestion, question generation, analytics, and admin tooling.
+
+The project is designed to be different from generic question banks: every answer can become a guided teaching moment. Instead of only showing a short solution, the platform can generate structured, step-by-step explanations with highlighted evidence, board notes, animated cues, figure references, and bilingual support. The goal is to help students understand why an answer works, why the distractors fail, and how to solve similar SAT problems next time.
+
+## What Makes It Different
+
+- Detailed SAT-style reasoning instead of short answer keys.
+- Visual explanation protocol for highlighting passages, stems, choices, and figures.
+- Math explanations that choose between graphing, substitution, algebra, estimation, and self-check strategies.
+- Reading & Writing explanations that track keywords, evidence, grammar logic, and distractor traps.
+- Adaptive practice driven by skill mastery, recent performance, spaced repetition, and study-plan history.
+- Admin import workflow for PDFs, AI parsing, draft review, figure cropping, validation, and publishing.
+- English and Chinese UI/explanations for bilingual learners.
+
+## Core Features
+
+### Student Experience
+
+- Learning dashboard with daily goals, target minutes, question count, progress, streak, tutor notes, and mastery summaries.
+- Practice sessions with multiple-choice and fill-in SAT-style questions.
+- AI explanation history and detailed review surfaces.
+- Analytics pages for performance, skill mastery, and learning diagnostics.
+- Settings, membership status, support/suggestions, and authenticated user flows.
+
+### AI Explanations
+
+The backend generates explanations using a structured animation protocol (`tutor.anim.v1`). Each explanation can include:
+
+- A concise summary.
+- 5-7 guided steps.
+- Teacher-style narration.
+- Board notes and takeaway rules.
+- Highlight, underline, circle, strike, note, color, and font cues.
+- Passage/stem/choice/figure targeting.
+- Math and Reading/Writing-specific strategy prompts.
+- English or Chinese output, with key SAT wording preserved when useful.
+
+The frontend renders these explanations through an interactive viewer that plays the steps and visually highlights the relevant text.
+
+### Adaptive Learning
+
+- Skill mastery tracking by SAT domain.
+- Question selection based on mastery gaps, recency, past answers, and due review.
+- Daily study plan generation with blocks, target questions, minutes, and focus skills.
+- Diagnostic flow before plan generation.
+- Spaced repetition and score/analytics services.
+
+### Admin & Content Pipeline
+
+- Question CRUD and validation.
+- PDF upload and ingestion.
+- AI-assisted question normalization and solving.
+- Draft question review and publishing.
+- Figure extraction/cropping and secure figure URLs.
+- OpenAI/API event logging for import jobs.
+- Question explanation caching in multiple languages.
+
+## Tech Stack
+
+### Frontend
+
+- Next.js 16 App Router
+- React 19
+- TypeScript
+- Tailwind CSS 4
+- React Query
+- Zustand
+- Axios
+- KaTeX / markdown math rendering
+- Lucide React
+
+### Backend
+
+- Flask 3
+- SQLAlchemy 2
+- Flask-Migrate / Alembic
+- Flask-JWT-Extended
+- Flask-CORS
+- Flask-Limiter
+- Marshmallow / Pydantic
+- pdfplumber / python-docx / unstructured
+- Celery / Redis hooks for background work
+- Prometheus metrics
+- OpenAI-compatible API integration
+
+## Repository Structure
+
+```text
+frontend/
+  src/
+    app/          Next.js routes: dashboard, practice, AI explain, analytics, admin, auth.
+    components/   App shell, dashboard, practice, explanation viewer, admin import UI.
+    services/     API clients for auth, learning, admin, analytics, AI explain, support.
+    hooks/         Auth, i18n, dashboard data.
+    stores/        Zustand auth/session state.
+    types/         Shared TypeScript response types.
+    lib/           HTTP client, env, image helpers, auth storage.
+
+sat_platform/
+  app.py          Flask entry point.
+  config.py       Backend configuration and environment variables.
+  sat_app/
+    blueprints/   Auth, admin, learning, AI, analytics, diagnostic, support APIs.
+    services/     AI explainer, adaptive engine, PDF ingest, plans, sessions, analytics.
+    models/       Users, questions, learning sessions, imports, analytics, memberships.
+    schemas/      Marshmallow/Pydantic request and response schemas.
+    utils/        Security, signed URLs, file parsing.
+    tasks/        Question/import task helpers.
+  migrations/     Alembic database migrations.
+  tests/          Backend test suite.
+
+Others/
+  BackEndPlans/   Backend implementation notes and SAT PDF samples.
+  FrontEndPlans/  Frontend implementation notes.
+  scripts/        Development and ingestion scripts.
+
+docs/images/      README screenshots and documentation images.
+```
+
+## Quick Start
+
+### 1. Backend
+
 ```bash
-python3 -m venv .venv
+cd sat_platform
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+
+# macOS/Linux
 source .venv/bin/activate
+
 pip install --upgrade pip
-pip install -r sat_platform/requirements.txt
+pip install -r requirements.txt
 ```
-2) Environment
- - Fill `sat_platform/.env` (see `.env.example`): `DATABASE_URL`, `CORS_ORIGINS`, `OPENAI_API_KEY`, `AI_EXPLAINER_MODEL`, `AI_PARSER_MODEL`, `AI_PDF_NORMALIZE_MODEL`, etc.
-3) Migrations / DB
+
+Create `sat_platform/.env`:
+
+```env
+FLASK_APP=app
+FLASK_ENV=development
+DATABASE_URL=sqlite+pysqlite:///sat_dev.db
+JWT_SECRET_KEY=change-this-secret
+CORS_ORIGINS=http://localhost:3000
+OPENAI_API_KEY=
+AI_MODEL_NAME=gpt-4o-mini
+AI_EXPLAINER_ENABLE=true
+AI_PARSER_ENABLE=true
+AI_DIAGNOSTIC_ENABLE=true
+FRONTEND_BASE_URL=http://localhost:3000
+MAIL_ENABLED=false
+```
+
+Run migrations and start the API:
+
 ```bash
-cd sat_platform
-flask db upgrade
+flask --app app db upgrade
+flask --app app run --host 0.0.0.0 --port 5080
 ```
-4) Run backend
-```bash
-cd sat_platform
-flask --app app run  # default 5080
-```
-5) Run frontend
+
+### 2. Frontend
+
 ```bash
 cd frontend
 npm install
-npm run dev  # default 3000; set NEXT_PUBLIC_API_BASE_URL to backend
 ```
-6) Smoke tests
+
+Create `frontend/.env.local`:
+
+```env
+NEXT_PUBLIC_APP_NAME=SAT AI Tutor
+NEXT_PUBLIC_API_BASE=http://127.0.0.1:5080
+NEXT_PUBLIC_GAMIFICATION_COPY=Complete a block to keep your streak alive!
+```
+
+Run the web app:
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+## Common Commands
+
+Backend:
+
+```bash
+cd sat_platform
+pytest
+flask --app app db migrate -m "message"
+flask --app app db upgrade
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm run lint
+npm run build
+npm run start
+```
+
+## Important API Areas
+
+- Auth: `/api/auth/register`, `/api/auth/login`, `/api/auth/me`
+- Learning plan: `/api/learning/plan/today`, `/api/learning/plan/regenerate`
+- Practice sessions: `/api/learning/session/start`, `/api/learning/session/answer`, `/api/learning/session/end`
+- AI explain: `/api/ai/explain`
+- Analytics: `/api/analytics/*`
+- Diagnostic: `/api/diagnostic/*`
+- Admin questions/imports: `/api/admin/questions`, `/api/admin/questions/upload`, `/api/admin/questions/parse`
+- Support: `/api/support/*`
+- Metrics: `/metrics`
+
+## Configuration Notes
+
+- `OPENAI_API_KEY` enables AI explanations, diagnostic feedback, parsing, PDF normalization, and question generation.
+- `AI_MODEL_NAME` is the shared model knob used by explainer, parser, PDF, tutor notes, and diagnostic services unless more specific variables are added.
+- `PLAN_*` variables control daily plan size and block length.
+- `ADAPTIVE_*` variables control mastery updates.
+- `AI_EXPLAIN_FREE_DAILY_LIMIT` and membership variables control explain quota behavior.
+- `MAIL_*` variables enable verification, password reset, and email-change flows.
+- SQLite is the default local database; production can use PostgreSQL through `DATABASE_URL`.
+
+## Testing
+
+The backend includes tests for:
+
+- App factory and auth
+- Admin question workflows
+- AI explanations
+- Adaptive engine
+- Analytics
+- Learning sessions and plans
+- Membership and mail services
+- Metrics and support flows
+- PDF/question import behavior
+
+Run:
+
 ```bash
 cd sat_platform
 pytest
 ```
 
-## Common APIs
-- Health: `GET /api/auth/ping`
-- Auth: `POST /api/auth/register` / `login` / `GET /api/auth/me`
-- Plan: `GET /api/learning/plan/today`, `POST /api/learning/plan/regenerate`
-- Practice: `POST /api/learning/session/start` / `answer` / `end`
-- AI explain: `POST /api/ai/explain`
-- Admin questions: `/api/admin/questions` CRUD, `/api/admin/questions/upload` (PDF), `/api/admin/questions/parse`
+## Development Notes
 
-## Question integrity
-- Missing stem/choices/answer or fill acceptable is recorded in `question_validation_issues`; invalid questions are filtered when assigning.
-- Fill (SPR): answers must be ≤5 chars (dot counts, minus does not); list all scoring-equivalent forms. Applies to PDF ingest and AI generation.
+- The frontend automatically falls back to `http://127.0.0.1:5080` for API calls when running locally.
+- The explanation viewer supports markdown, math, KaTeX, step playback, and active visual directives.
+- Imported/generated questions are validated so invalid stems, answers, choices, or fill-in schemas are filtered before assignment.
+- Figure URLs are signed and rate-limited for preview/practice usage.
+- Some planning notes and scripts are intentionally kept in `Others/` as implementation history and development utilities.
 
-## Config cheat sheet
-- Mail (Zoho example):
-```
-MAIL_SERVER=smtppro.zoho.com
-MAIL_PORT=587
-MAIL_USE_TLS=true
-MAIL_USERNAME=noreply@aisatmentor.com
-MAIL_PASSWORD=your-app-password
-MAIL_DEFAULT_SENDER="SAT AI Tutor <noreply@aisatmentor.com>"
-MAIL_IMAP_SERVER=imappro.zoho.com
-MAIL_IMAP_PORT=993
-MAIL_IMAP_USE_SSL=true
-```
-- Adaptive/Plan: `ADAPTIVE_*`, `PLAN_*`
-- Rate/metrics: `RATE_LIMIT_DEFAULTS`, `/metrics` (Prometheus)
+## License
 
-## Structure
-```
-sat_platform/
-  app.py / config.py / requirements.txt
-  sat_app/
-    blueprints/   # auth, admin, learning, ai, analytics...
-    services/     # ai_explainer, ai_paper, pdf_ingest, adaptive_engine, ...
-    models/       # user, question, study_session, ...
-    schemas/ utils/ tasks/
-  migrations/
-frontend/
-  src/...
-```
-
-## Dev tips
-- After model changes: `flask db migrate -m "msg" && flask db upgrade`
-- Clean tracked ignored files: `git ls-files -i --cached -X .gitignore -z | xargs -0 git rm --cached`
-- Ports: backend 5080 / frontend 3000; point frontend API base to backend.
-
-## Scripts
-See `scripts/` for step test scripts (e.g., `test_step06.sh`, `test_step07.sh`); ensure venv and deps are ready before running.
-
+No license file is currently included.
