@@ -4,19 +4,19 @@
 
 ![SAT AI Tutor learning dashboard](docs/images/sat-ai-tutor-dashboard.png)
 
-SAT AI Tutor is a full-stack AI learning platform for SAT preparation. It combines adaptive practice, daily study planning, detailed AI explanations, visual explanation playback, PDF question ingestion, question generation, analytics, and admin tooling.
+SAT AI Tutor is a full-stack SAT practice and review platform. It includes adaptive practice, daily study planning, explanation playback, PDF question ingestion, analytics, and admin tools for managing question content.
 
-The project is designed to be different from generic question banks: every answer can become a guided teaching moment. Instead of only showing a short solution, the platform can generate structured, step-by-step explanations with highlighted evidence, board notes, animated cues, figure references, and bilingual support. The goal is to help students understand why an answer works, why the distractors fail, and how to solve similar SAT problems next time.
+The project focuses on turning completed questions into review material. Explanations can include step-by-step reasoning, highlighted evidence, board notes, figure references, and bilingual output. The goal is practical: help students understand the answer they just missed and give admins a workflow for importing and reviewing new SAT-style questions.
 
-## What Makes It Different
+## Project Focus
 
-- Detailed SAT-style reasoning instead of short answer keys.
-- Visual explanation protocol for highlighting passages, stems, choices, and figures.
-- Math explanations that choose between graphing, substitution, algebra, estimation, and self-check strategies.
-- Reading & Writing explanations that track keywords, evidence, grammar logic, and distractor traps.
-- Adaptive practice driven by skill mastery, recent performance, spaced repetition, and study-plan history.
-- Admin import workflow for PDFs, AI parsing, draft review, figure cropping, validation, and publishing.
-- English and Chinese UI/explanations for bilingual learners.
+- SAT-style explanations that go beyond a short answer key.
+- A visual explanation format for passages, stems, choices, and figures.
+- Math review paths for graphing, substitution, algebra, estimation, and self-checking.
+- Reading and Writing review paths for evidence, grammar logic, and distractor traps.
+- Adaptive practice based on mastery, recent performance, review timing, and study-plan history.
+- Admin workflows for PDF import, draft review, figure cropping, validation, and publishing.
+- English and Chinese UI/explanation support.
 
 ## Core Features
 
