@@ -22,9 +22,28 @@
   <img src=".github/assets/readme-hero.svg" alt="SAT AI Tutor overview image" width="100%" />
 </p>
 
+<p align="center">
+  <img src="docs/images/sat-ai-tutor-dashboard.png" alt="SAT AI Tutor learning dashboard screenshot" width="100%" />
+</p>
+
 ## Why This Exists
 
-Students need more than an answer key after missing a question. This platform turns practice attempts into guided review: explanations, visual highlights, mastery tracking, and admin-managed SAT-style content.
+Students need more than an answer key after missing a question. This platform turns practice attempts into guided review: visual explanations, mastery tracking, adaptive planning, and admin-managed SAT-style content.
+
+## Workflow
+
+- Students complete SAT-style practice sessions.
+- The backend tracks mastery, session history, and review timing.
+- AI explanations are generated as structured steps with highlights and notes.
+- Admins import and review question content from PDFs.
+- Analytics and plans guide the next practice session.
+
+## Features
+
+- Student dashboard, practice sessions, review history, analytics, and study plans.
+- Structured AI explanations with visual highlights, board notes, math rendering, and bilingual output.
+- PDF ingestion and admin review workflow for SAT-style questions.
+- Backend tests, migrations, metrics, memberships, and support flows.
 
 ## Quickstart
 
@@ -43,13 +62,6 @@ npm run dev
 
 Configure backend `.env` values before using OpenAI, email, or production database features.
 
-## Features
-
-- Student dashboard, practice sessions, review history, mastery analytics, and study plans.
-- Structured AI explanations with highlights, board notes, math rendering, and bilingual output.
-- PDF ingestion and admin review workflow for SAT-style questions.
-- Backend tests, migrations, metrics, memberships, and support flows.
-
 ## Tech Stack
 
 | Layer | Technology | Role |
@@ -59,7 +71,16 @@ Configure backend `.env` values before using OpenAI, email, or production databa
 | AI | OpenAI-compatible API | Explanations, import assistance, and review content. |
 | Content | pdfplumber, python-docx, unstructured | Question import and document parsing. |
 
+## Project Map
 
-## Project Notes
+```text
+frontend/                 Next.js student/admin UI
+sat_platform/             Flask backend, models, services, migrations, tests
+docs/images/              README dashboard screenshot
+Others/                   planning notes, scripts, SAT PDF samples
+pytest.ini                backend test configuration
+```
 
-This is one of the larger full-stack repos in the portfolio. The README stays short; deeper backend/frontend plans live under `Others/` and `docs/`.
+## Notes
+
+This is one of the larger full-stack projects in the portfolio. Deeper implementation plans live under `Others/` and `docs/`.
