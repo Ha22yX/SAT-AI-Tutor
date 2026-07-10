@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_ROOT}/.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_ROOT}/../.." && pwd)"
 SAT_DIR="${PROJECT_ROOT}/sat_platform"
 
 cd "$SAT_DIR"

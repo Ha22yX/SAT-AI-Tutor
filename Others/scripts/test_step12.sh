@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 echo "[Step12] Running Step11 checks..."
-bash "$REPO_ROOT/scripts/test_step11.sh"
+bash "$REPO_ROOT/Others/scripts/test_step11.sh"
 
 echo "[Step12] Running lint checks..."
 cd "$REPO_ROOT"

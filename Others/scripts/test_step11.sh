@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 echo "[Step11] Running Step10 checks..."
-bash "$REPO_ROOT/scripts/test_step10.sh"
+bash "$REPO_ROOT/Others/scripts/test_step10.sh"
 
 echo "[Step11] Running question import tests..."
 cd "$REPO_ROOT/sat_platform"

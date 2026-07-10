@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
-      - uses: actions/setup-python@v5
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - name: Install dependencies
@@ -25,5 +25,5 @@ jobs:
           black --check sat_platform
           isort --check-only sat_platform
       - name: Run tests
-        run: bash scripts/test_step11.sh
+        run: bash Others/scripts/test_step11.sh
 
