@@ -88,7 +88,7 @@ def test_student_cannot_access_admin_questions(client):
 def _login_root_admin(client):
     resp = client.post(
         "/api/auth/login",
-        json={"identifier": "ha22y", "password": "Kicofy5438"},
+        json={"identifier": "ha22y", "password": "ChangeMeRootAdmin123!"},
     )
     assert resp.status_code == 200
     return resp.get_json()["access_token"]

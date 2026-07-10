@@ -57,7 +57,7 @@ fi
 echo
 echo "== Backend environment (.env) =="
 prompt ROOT_ADMIN_USER "Root admin username" "ha22y"
-prompt ROOT_ADMIN_PASS "Root admin password" "Kicofy5438"
+prompt ROOT_ADMIN_PASS "Root admin password" "ChangeMeRootAdmin123!"
 prompt ROOT_ADMIN_EMAIL "Root admin email" "ha22y@example.com"
 prompt JWT_SECRET "JWT secret (random string)" "$(openssl rand -hex 16 2>/dev/null || echo 'change-me')"
 prompt DATABASE_URL "Database URL" "sqlite:///sat_dev.db"

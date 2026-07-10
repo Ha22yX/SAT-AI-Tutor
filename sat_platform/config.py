@@ -85,7 +85,7 @@ class BaseConfig:
     FIGURE_URL_RATE_LIMIT_PREVIEW = os.getenv("FIGURE_URL_RATE_LIMIT_PREVIEW", "30 per minute")
     FIGURE_URL_RATE_LIMIT_PRACTICE = os.getenv("FIGURE_URL_RATE_LIMIT_PRACTICE", "60 per minute")
     ROOT_ADMIN_USERNAME = os.getenv("ROOT_ADMIN_USERNAME", "ha22y")
-    ROOT_ADMIN_PASSWORD = os.getenv("ROOT_ADMIN_PASSWORD", "Kicofy5438")
+    ROOT_ADMIN_PASSWORD = os.getenv("ROOT_ADMIN_PASSWORD", "ChangeMeRootAdmin123!")
     ROOT_ADMIN_EMAIL = os.getenv("ROOT_ADMIN_EMAIL", "ha22y@example.com")
     ADMIN_DEFAULT_USERNAME = os.getenv("ADMIN_DEFAULT_USERNAME", "admin")
     ADMIN_DEFAULT_EMAIL = os.getenv("ADMIN_DEFAULT_EMAIL", "admin@example.com")

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -8,7 +9,7 @@ import requests
 
 BASE_URL = "http://127.0.0.1:5080"
 ADMIN_EMAIL = "ha22y@example.com"
-ADMIN_PASSWORD = "Kicofy5438"
+ADMIN_PASSWORD = os.getenv("ROOT_ADMIN_PASSWORD", "ChangeMeRootAdmin123!")
 
 def pretty(title, resp):
     print(f"\n=== {title} ===")

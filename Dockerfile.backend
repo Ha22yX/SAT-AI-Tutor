@@ -1,0 +1,29 @@
+FROM python:3.12-slim
+
+ENV FLASK_CONFIG=production \
+    HOST=0.0.0.0 \
+    PORT=5080 \
+    DATABASE_URL=sqlite+pysqlite:////data/sat_ai_tutor.db \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app/sat_platform
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      build-essential \
+      libmagic1 \
+      poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY sat_platform/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY sat_platform .
+
+RUN mkdir -p /data
+VOLUME ["/data"]
+
+EXPOSE 5080
+
+CMD ["gunicorn", "--bind", "0.0.0.0:5080", "app:app"]

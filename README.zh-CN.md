@@ -14,6 +14,8 @@
     <img alt="Next.js: 16" src="https://img.shields.io/badge/Next.js-16-111111?style=for-the-badge&logo=nextdotjs&logoColor=white" />
     <img alt="React: 19" src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=white" />
     <img alt="Flask: 3" src="https://img.shields.io/badge/Flask-3-000000?style=for-the-badge&logo=flask&logoColor=white" />
+    <a href="https://github.com/Ha22yX/SAT-AI-Tutor/pkgs/container/sat-ai-tutor-backend"><img alt="Backend Docker image" src="https://img.shields.io/badge/GHCR-backend-2496ED?style=for-the-badge&logo=docker&logoColor=white" /></a>
+    <a href="https://github.com/Ha22yX/SAT-AI-Tutor/pkgs/container/sat-ai-tutor-frontend"><img alt="Frontend Docker image" src="https://img.shields.io/badge/GHCR-frontend-2496ED?style=for-the-badge&logo=docker&logoColor=white" /></a>
     <img alt="AI: explanations" src="https://img.shields.io/badge/AI-explanations-7d73b7?style=for-the-badge" />
   </p>
 </div>
@@ -61,6 +63,48 @@ npm run dev
 ```
 
 使用 OpenAI、邮件或生产数据库功能前，请先配置后端 `.env`。
+
+## Docker / GHCR
+
+这个项目会发布两个 GitHub Container Registry 镜像：
+
+- `ghcr.io/ha22yx/sat-ai-tutor-backend:latest`：Flask API、数据库、认证、AI 服务和 PDF 导入。
+- `ghcr.io/ha22yx/sat-ai-tutor-frontend:latest`：Next.js 学生端/管理端界面。
+
+最小 Docker Compose 示例：
+
+```yaml
+services:
+  backend:
+    image: ghcr.io/ha22yx/sat-ai-tutor-backend:latest
+    ports:
+      - "5080:5080"
+    volumes:
+      - sat-data:/data
+    environment:
+      FLASK_CONFIG: production
+      DATABASE_URL: sqlite+pysqlite:////data/sat_ai_tutor.db
+      JWT_SECRET_KEY: change-this-to-a-long-random-value
+      ROOT_ADMIN_PASSWORD: change-this-root-password
+      ADMIN_DEFAULT_PASSWORD: change-this-admin-password
+      SEED_STUDENT_PASSWORD: change-this-student-password
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+
+  frontend:
+    image: ghcr.io/ha22yx/sat-ai-tutor-frontend:latest
+    ports:
+      - "3000:3000"
+    environment:
+      API_BASE: http://backend:5080
+      NEXT_PUBLIC_API_BASE: /api
+    depends_on:
+      - backend
+
+volumes:
+  sat-data:
+```
+
+不要把 `.env`、OpenAI Key、邮箱密码、JWT 密钥、管理员密码、上传的 PDF 或本地 SQLite 数据库打进镜像。请通过运行时环境变量、Docker Compose secrets 或部署平台的密钥管理来提供这些配置。
 
 ## 技术栈
 
