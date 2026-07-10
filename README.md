@@ -7,6 +7,8 @@
     &middot;
     <a href="#quickstart">Quickstart</a>
     &middot;
+    <a href="#features">Features</a>
+    &middot;
     <a href="#tech-stack">Tech Stack</a>
   </p>
 
@@ -28,26 +30,31 @@
   <img src="docs/images/sat-ai-tutor-dashboard.png" alt="SAT AI Tutor learning dashboard screenshot" width="100%" />
 </p>
 
-## Why This Exists
+## Overview
 
-Students need more than an answer key after missing a question. This platform turns practice attempts into guided review: visual explanations, mastery tracking, adaptive planning, and admin-managed SAT-style content.
+This is one of the larger full-stack projects in the portfolio. It combines a student-facing SAT practice interface with a Flask backend that tracks mastery, sessions, explanations, imports, analytics, membership, and admin workflows.
 
-## Workflow
-
-- Students complete SAT-style practice sessions.
-- The backend tracks mastery, session history, and review timing.
-- AI explanations are generated as structured steps with highlights and notes.
-- Admins import and review question content from PDFs.
-- Analytics and plans guide the next practice session.
+The project is designed around the idea that a missed question should become guided review, not just an answer-key lookup.
 
 ## Features
 
 - Student dashboard, practice sessions, review history, analytics, and study plans.
-- Structured AI explanations with visual highlights, board notes, math rendering, and bilingual output.
+- Structured AI explanations with highlights, notes, math rendering, and bilingual output.
 - PDF ingestion and admin review workflow for SAT-style questions.
-- Backend tests, migrations, metrics, memberships, and support flows.
+- Backend migrations, tests, metrics, membership, and support flows.
+- Published backend and frontend GHCR images for deployment experiments.
+
+## How It Works
+
+1. Students complete SAT-style practice sessions.
+2. The backend records answers, mastery, session history, and review timing.
+3. AI services generate explanations, diagnostics, and import assistance.
+4. Admins import/review content and operate the platform.
+5. The frontend presents plans, analytics, and explanation views.
 
 ## Quickstart
+
+Run the project locally with the commands below.
 
 ```bash
 git clone https://github.com/Ha22yX/SAT-AI-Tutor.git
@@ -104,7 +111,16 @@ volumes:
   sat-data:
 ```
 
-Do not bake `.env`, OpenAI keys, mail passwords, JWT secrets, admin passwords, uploaded PDFs, or local SQLite files into the image. Pass secrets through runtime environment variables, Docker Compose secrets, or your deployment platform.
+Do not bake `.env`, OpenAI keys, mail passwords, JWT secrets, admin passwords, uploaded PDFs, or local SQLite files into the image.
+
+## Configuration
+
+| Item | Purpose |
+| --- | --- |
+| Backend secrets | `JWT_SECRET_KEY`, admin passwords, OpenAI key, mail credentials. |
+| Database | SQLite for local work; configure `DATABASE_URL` for deployment. |
+| Frontend API | Set `API_BASE` / `NEXT_PUBLIC_API_BASE` to match backend routing. |
+| PDF import | Review generated/imported questions before assigning them to students. |
 
 ## Tech Stack
 
@@ -112,19 +128,24 @@ Do not bake `.env`, OpenAI keys, mail passwords, JWT secrets, admin passwords, u
 | --- | --- | --- |
 | Frontend | Next.js, React, TypeScript, Tailwind | Student/admin UI and explanation viewer. |
 | Backend | Flask, SQLAlchemy, Alembic | API, auth, learning data, and migrations. |
-| AI | OpenAI-compatible API | Explanations, import assistance, and review content. |
+| AI | OpenAI-compatible API | Explanations, import assistance, review content. |
 | Content | pdfplumber, python-docx, unstructured | Question import and document parsing. |
 
-## Project Map
+## Project Layout
 
 ```text
 frontend/                 Next.js student/admin UI
 sat_platform/             Flask backend, models, services, migrations, tests
 docs/images/              README dashboard screenshot
 Others/                   planning notes, scripts, SAT PDF samples
+Dockerfile.*              backend/frontend Docker images
 pytest.ini                backend test configuration
 ```
 
-## Notes
+## Status
 
-This is one of the larger full-stack projects in the portfolio. Deeper implementation plans live under `Others/` and `docs/`.
+Active full-stack learning-platform project. Deeper implementation plans live under `Others/` and `docs/`; treat admin credentials and API keys as runtime secrets.
+
+## License
+
+No project-wide open-source license has been declared yet.
