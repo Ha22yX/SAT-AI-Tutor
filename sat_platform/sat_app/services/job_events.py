@@ -31,4 +31,3 @@ class JobEventBroker:
 
 
 job_event_broker = JobEventBroker()
-

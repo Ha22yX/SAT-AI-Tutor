@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from http import HTTPStatus
 
-from flask import Blueprint, jsonify, request, current_app
-from flask_jwt_extended import jwt_required, current_user
+from flask import Blueprint, current_app, jsonify, request
+from flask_jwt_extended import current_user, jwt_required
 
 from ..schemas.support_schema import SuggestionSchema
-from ..services import settings_service, mail_service
+from ..services import mail_service, settings_service
 
 support_bp = Blueprint("support_bp", __name__, url_prefix="/api/support")
 
@@ -29,7 +29,11 @@ def submit_suggestion():
     user = current_user
     subject = f"[Suggestion] {payload['title']}"
     app_name = current_app.config.get("APP_NAME", "SAT AI Tutor")
-    portal_url = current_app.config.get("APP_URL") or current_app.config.get("FRONTEND_URL") or "#"
+    portal_url = (
+        current_app.config.get("APP_URL")
+        or current_app.config.get("FRONTEND_URL")
+        or "#"
+    )
     contact_line = payload.get("contact") or "未提供"
     text_body = (
         f"{app_name} - 用户建议/投诉\n"
@@ -84,4 +88,3 @@ def submit_suggestion():
         headers={"X-SAT-Feedback-Type": "suggestion"},
     )
     return jsonify({"message": "submitted"})
-

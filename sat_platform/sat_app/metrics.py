@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 REQUEST_COUNT = Counter(
     "sat_requests_total",
@@ -24,4 +24,3 @@ def record_request(method: str, endpoint: str, status: int, latency: float) -> N
 def latest_metrics() -> tuple[bytes, str]:
     data = generate_latest()
     return data, CONTENT_TYPE_LATEST
-

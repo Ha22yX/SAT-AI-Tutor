@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Dict, Tuple
 
-from sqlalchemy import func
 from flask import current_app
+from sqlalchemy import func
 
 from ..extensions import db
 from ..models import StudyPlan, UserQuestionLog
@@ -20,15 +20,21 @@ def _config_defaults() -> Tuple[int, int, int]:
     cfg = current_app.config
     default_questions = int(cfg.get("PLAN_DEFAULT_QUESTIONS", 12))
     min_per_q = int(cfg.get("PLAN_MIN_PER_QUESTION", 5))
-    default_minutes = int(cfg.get("PLAN_DEFAULT_MINUTES", default_questions * min_per_q))
+    default_minutes = int(
+        cfg.get("PLAN_DEFAULT_MINUTES", default_questions * min_per_q)
+    )
     fallback_sec_per_q = int(cfg.get("PROGRESS_FALLBACK_SEC_PER_QUESTION", 90))
     return default_questions, default_minutes, fallback_sec_per_q
 
 
-def _load_daily_activity(user_id: int, start_day: date, end_day: date) -> Dict[date, dict]:
+def _load_daily_activity(
+    user_id: int, start_day: date, end_day: date
+) -> Dict[date, dict]:
     """Return per-day counts and seconds within [start_day, end_day]."""
     start_dt = datetime.combine(start_day, time.min).replace(tzinfo=timezone.utc)
-    end_dt = datetime.combine(end_day + timedelta(days=1), time.min).replace(tzinfo=timezone.utc)
+    end_dt = datetime.combine(end_day + timedelta(days=1), time.min).replace(
+        tzinfo=timezone.utc
+    )
 
     rows = (
         db.session.query(
@@ -65,14 +71,14 @@ def _load_daily_activity(user_id: int, start_day: date, end_day: date) -> Dict[d
     return activity
 
 
-def _plan_targets_by_day(user_id: int, start_day: date, end_day: date, default_q: int, default_m: int) -> Dict[date, Tuple[int, int]]:
-    plans = (
-        StudyPlan.query.filter(
-            StudyPlan.user_id == user_id,
-            StudyPlan.plan_date >= start_day,
-            StudyPlan.plan_date <= end_day,
-        ).all()
-    )
+def _plan_targets_by_day(
+    user_id: int, start_day: date, end_day: date, default_q: int, default_m: int
+) -> Dict[date, Tuple[int, int]]:
+    plans = StudyPlan.query.filter(
+        StudyPlan.user_id == user_id,
+        StudyPlan.plan_date >= start_day,
+        StudyPlan.plan_date <= end_day,
+    ).all()
     mapping: Dict[date, Tuple[int, int]] = {}
     for plan in plans:
         mapping[plan.plan_date] = (
@@ -82,7 +88,13 @@ def _plan_targets_by_day(user_id: int, start_day: date, end_day: date, default_q
     return mapping
 
 
-def _is_day_complete(day: date, activity: Dict[date, dict], targets: Dict[date, Tuple[int, int]], default_q: int, default_m: int) -> bool:
+def _is_day_complete(
+    day: date,
+    activity: Dict[date, dict],
+    targets: Dict[date, Tuple[int, int]],
+    default_q: int,
+    default_m: int,
+) -> bool:
     stats = activity.get(day, {"questions": 0, "seconds": 0})
     questions = stats["questions"]
     minutes = stats["seconds"] / 60.0 if stats["seconds"] else 0
@@ -91,7 +103,15 @@ def _is_day_complete(day: date, activity: Dict[date, dict], targets: Dict[date, 
     return (questions >= 0.8 * target_q) or (minutes >= 0.8 * target_m)
 
 
-def _streak_days(user_id: int, today: date, activity: Dict[date, dict], targets: Dict[date, Tuple[int, int]], default_q: int, default_m: int, lookback_days: int = 30) -> int:
+def _streak_days(
+    user_id: int,
+    today: date,
+    activity: Dict[date, dict],
+    targets: Dict[date, Tuple[int, int]],
+    default_q: int,
+    default_m: int,
+    lookback_days: int = 30,
+) -> int:
     streak = 0
     for offset in range(0, lookback_days):
         day = today - timedelta(days=offset)
@@ -124,12 +144,22 @@ def get_today_progress(user_id: int) -> dict:
     activity = _load_daily_activity(user_id, start_day, today)
 
     targets = _plan_targets_by_day(user_id, start_day, today, default_q, default_m)
-    streak = _streak_days(user_id, today, activity, targets, default_q, default_m, lookback_days=lookback_days)
+    streak = _streak_days(
+        user_id,
+        today,
+        activity,
+        targets,
+        default_q,
+        default_m,
+        lookback_days=lookback_days,
+    )
     next_goal = _next_goal(streak)
 
     today_stats = activity.get(today, {"questions": 0, "seconds": 0})
     today_plan_targets = targets.get(today, (default_q, default_m))
-    completed_minutes = round(today_stats["seconds"] / 60, 2) if today_stats["seconds"] else 0
+    completed_minutes = (
+        round(today_stats["seconds"] / 60, 2) if today_stats["seconds"] else 0
+    )
 
     last_active_day = None
     if activity:
@@ -144,6 +174,7 @@ def get_today_progress(user_id: int) -> dict:
         "streak_days": streak,
         "streak_next_goal": next_goal,
         "streak_goals": [3, 7, 14, 30],
-        "last_active_day": last_active_day.isoformat() if isinstance(last_active_day, date) else None,
+        "last_active_day": (
+            last_active_day.isoformat() if isinstance(last_active_day, date) else None
+        ),
     }
-

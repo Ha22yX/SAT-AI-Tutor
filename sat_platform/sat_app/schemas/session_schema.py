@@ -6,7 +6,9 @@ from marshmallow import Schema, fields, validate
 
 
 class SessionStartSchema(Schema):
-    num_questions = fields.Integer(load_default=10, validate=validate.Range(min=1, max=50))
+    num_questions = fields.Integer(
+        load_default=10, validate=validate.Range(min=1, max=50)
+    )
     section = fields.String(load_default=None)
     source_id = fields.Integer(load_default=None, allow_none=True)
 
@@ -34,4 +36,3 @@ class SessionSchema(Schema):
     plan_block_id = fields.String(dump_only=True)
     session_type = fields.String(dump_only=True)
     diagnostic_attempt_id = fields.Integer(dump_only=True, allow_none=True)
-

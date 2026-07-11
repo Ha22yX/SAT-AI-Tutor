@@ -5,9 +5,8 @@ Revises: 8c5e7c8c02af
 Create Date: 2025-12-06 12:00:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "c6e4e6179c1a"
 down_revision = "8c5e7c8c02af"
@@ -36,7 +35,12 @@ def upgrade():
 
     add_column(
         "is_email_verified",
-        sa.Column("is_email_verified", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "is_email_verified",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
     )
     add_column(
         "email_verification_code",
@@ -98,4 +102,3 @@ def downgrade():
     ]:
         if _has_column(inspector, "users", column):
             op.drop_column("users", column)
-

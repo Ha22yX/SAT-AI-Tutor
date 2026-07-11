@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any
 
 from ..extensions import db
 from ..models import GeneralSetting
@@ -31,4 +30,3 @@ def get_many(keys: list[str]) -> dict[str, str | None]:
     settings = GeneralSetting.query.filter(GeneralSetting.key.in_(keys)).all()
     mapping = {setting.key: setting.value for setting in settings}
     return {key: mapping.get(key) for key in keys}
-

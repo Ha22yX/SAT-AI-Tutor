@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from sat_app.extensions import db
-from sat_app.models import StudyPlan, User, UserProfile, DiagnosticAttempt
+from sat_app.models import DiagnosticAttempt, StudyPlan, User, UserProfile
 from sat_app.utils.security import hash_password
 
 
@@ -54,7 +54,7 @@ def test_plan_generate_all_students(app_with_db):
     output = result.output
     assert f"{first_id}" in output and f"{second_id}" in output
     with app_with_db.app_context():
-        assert StudyPlan.query.filter(
-            StudyPlan.user_id.in_([first_id, second_id])
-        ).count() == 2
-
+        assert (
+            StudyPlan.query.filter(StudyPlan.user_id.in_([first_id, second_id])).count()
+            == 2
+        )

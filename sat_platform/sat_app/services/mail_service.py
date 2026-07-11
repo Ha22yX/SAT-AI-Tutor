@@ -7,7 +7,7 @@ import smtplib
 from contextlib import contextmanager
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
-from typing import Iterable, Sequence
+from typing import Sequence
 
 from flask import current_app
 
@@ -77,7 +77,9 @@ def send_email(
     if headers:
         for key, value in headers.items():
             msg[key] = value
-    msg["Message-ID"] = make_msgid(domain=from_email.split("@")[-1] if from_email else None)
+    msg["Message-ID"] = make_msgid(
+        domain=from_email.split("@")[-1] if from_email else None
+    )
     if "X-Mailer" not in msg:
         agent = config.get("MAIL_HEADER_AGENT", "SAT-AI-Tutor Mailer")
         msg["X-Mailer"] = agent
@@ -172,4 +174,3 @@ def _smtp_connection(config: dict):
             client.quit()
         except Exception:  # pragma: no cover - defensive close
             client.close()
-

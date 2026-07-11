@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "5d3b89f0a2de"
@@ -21,7 +21,12 @@ def upgrade():
         "general_settings",
         sa.Column("key", sa.String(length=64), primary_key=True),
         sa.Column("value", sa.Text, nullable=True),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+        ),
     )
 
 
@@ -30,4 +35,3 @@ def downgrade():
     inspector = sa.inspect(bind)
     if "general_settings" in inspector.get_table_names():
         op.drop_table("general_settings")
-

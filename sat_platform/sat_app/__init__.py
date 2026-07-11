@@ -6,17 +6,17 @@ import os
 from time import perf_counter
 
 import click
-from flask import Flask, g, request, current_app
-from flask_jwt_extended import JWTManager
-from sqlalchemy import inspect, text, event
-
 from config import resolve_config
+from flask import Flask, current_app, g, request
+from flask_jwt_extended import JWTManager
+from sqlalchemy import event, inspect, text
+
 from .blueprints import BLUEPRINTS
-from .extensions import cors, db, jwt, migrate, limiter
-from .logging_config import configure_logging, assign_request_id
+from .blueprints.admin_bp import schedule_import_autoresume
+from .extensions import cors, db, jwt, limiter, migrate
+from .logging_config import assign_request_id, configure_logging
 from .metrics import record_request
 from .utils import hash_password
-from .blueprints.admin_bp import schedule_import_autoresume
 
 
 def create_app(config_name: str | None = None) -> Flask:
@@ -151,7 +151,9 @@ def _configure_sqlite_engine(app: Flask) -> None:
         engine = db.engine
 
         @event.listens_for(engine, "connect")
-        def _set_sqlite_pragmas(dbapi_connection, connection_record):  # pragma: no cover
+        def _set_sqlite_pragmas(
+            dbapi_connection, connection_record
+        ):  # pragma: no cover
             cursor = dbapi_connection.cursor()
             try:
                 cursor.execute("PRAGMA journal_mode=WAL;")
@@ -230,7 +232,8 @@ def _register_cli(app: Flask) -> None:
                     default_questions = app.config.get("PLAN_DEFAULT_QUESTIONS", 12)
                     minutes_per_question = app.config.get("PLAN_MIN_PER_QUESTION", 5)
                     student_user.profile = UserProfile(
-                        daily_available_minutes=default_questions * minutes_per_question,
+                        daily_available_minutes=default_questions
+                        * minutes_per_question,
                         daily_plan_questions=default_questions,
                         language_preference="en",
                     )
@@ -293,7 +296,9 @@ def _register_cli(app: Flask) -> None:
                         user_id=target_user_id, plan_date=target_date
                     )
                 except NotFound as exc:  # pragma: no cover - defensive
-                    raise click.ClickException(f"User {target_user_id} not found.") from exc
+                    raise click.ClickException(
+                        f"User {target_user_id} not found."
+                    ) from exc
                 click.echo(
                     f"Generated plan for user {target_user_id} on {plan.plan_date.isoformat()}."
                 )
@@ -348,7 +353,9 @@ def _ensure_email_verification_columns() -> None:
             f"ALTER TABLE users ADD COLUMN is_email_verified {boolean_type} NOT NULL DEFAULT {default_true}"
         )
     if "email_verification_code" not in columns:
-        statements.append("ALTER TABLE users ADD COLUMN email_verification_code VARCHAR(12)")
+        statements.append(
+            "ALTER TABLE users ADD COLUMN email_verification_code VARCHAR(12)"
+        )
     if "email_verification_expires_at" not in columns:
         statements.append(
             f"ALTER TABLE users ADD COLUMN email_verification_expires_at {datetime_type}"
@@ -419,7 +426,9 @@ def _ensure_user_status_columns() -> None:
     try:
         for statement in statements:
             connection.execute(text(statement))
-        connection.execute(text("UPDATE users SET is_active = 1 WHERE is_active IS NULL"))
+        connection.execute(
+            text("UPDATE users SET is_active = 1 WHERE is_active IS NULL")
+        )
         trans.commit()
     except Exception:  # pragma: no cover - defensive logging
         trans.rollback()
@@ -444,7 +453,9 @@ def _ensure_password_reset_columns() -> None:
     statements: list[str] = []
 
     if "password_reset_token" not in columns:
-        statements.append(f"ALTER TABLE users ADD COLUMN password_reset_token {varchar_type}")
+        statements.append(
+            f"ALTER TABLE users ADD COLUMN password_reset_token {varchar_type}"
+        )
     if "password_reset_requested_at" not in columns:
         statements.append(
             f"ALTER TABLE users ADD COLUMN password_reset_requested_at {datetime_type}"
@@ -486,9 +497,13 @@ def _ensure_membership_columns() -> None:
     statements: list[str] = []
 
     if "membership_expires_at" not in columns:
-        statements.append(f"ALTER TABLE users ADD COLUMN membership_expires_at {datetime_type}")
+        statements.append(
+            f"ALTER TABLE users ADD COLUMN membership_expires_at {datetime_type}"
+        )
     if "ai_explain_quota_date" not in columns:
-        statements.append(f"ALTER TABLE users ADD COLUMN ai_explain_quota_date {date_type}")
+        statements.append(
+            f"ALTER TABLE users ADD COLUMN ai_explain_quota_date {date_type}"
+        )
     if "ai_explain_quota_used" not in columns:
         statements.append(
             "ALTER TABLE users ADD COLUMN ai_explain_quota_used INTEGER NOT NULL DEFAULT 0"
@@ -521,7 +536,9 @@ def _ensure_question_explanation_columns() -> None:
     columns = {col["name"] for col in inspector.get_columns("question_explanations")}
     statements: list[str] = []
     if "source" not in columns:
-        statements.append("ALTER TABLE question_explanations ADD COLUMN source VARCHAR(32)")
+        statements.append(
+            "ALTER TABLE question_explanations ADD COLUMN source VARCHAR(32)"
+        )
 
     if not statements:
         return
@@ -580,4 +597,3 @@ def _ensure_ai_paper_job_columns() -> None:
         )
     finally:
         connection.close()
-

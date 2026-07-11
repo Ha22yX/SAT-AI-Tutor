@@ -3,24 +3,24 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Tuple
 
 from flask import current_app
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
-from werkzeug.exceptions import NotFound, BadRequest
+from werkzeug.exceptions import BadRequest, NotFound
 
 from ..extensions import db
 from ..models import (
+    Question,
     StudyPlan,
     StudyPlanTask,
     StudySession,
     User,
     UserProfile,
     UserQuestionLog,
-    Question,
 )
 from .adaptive_engine import get_mastery_snapshot
 from .skill_taxonomy import describe_skill
@@ -83,11 +83,9 @@ def _resolve_language(profile: UserProfile | None) -> str:
 
 
 def _available_sections() -> set[str]:
-    rows = (
-        db.session.execute(
-            db.select(Question.section, func.count(Question.id)).group_by(Question.section)
-        ).all()
-    )
+    rows = db.session.execute(
+        db.select(Question.section, func.count(Question.id)).group_by(Question.section)
+    ).all()
     return {section for section, count in rows if count}
 
 
@@ -101,7 +99,9 @@ def _load_recent_skill_stats(user_id: int, window_days: int = RECENT_WINDOW_DAYS
         .limit(600)
         .all()
     )
-    stats: Dict[str, dict] = defaultdict(lambda: {"total": 0, "correct": 0, "last_answered": None})
+    stats: Dict[str, dict] = defaultdict(
+        lambda: {"total": 0, "correct": 0, "last_answered": None}
+    )
     for log in logs:
         question = log.question
         if not question:
@@ -204,7 +204,9 @@ def _score_skill(
         else:
             reasons.append(f"Recent accuracy {recent_accuracy * 100:.0f}%")
     if skill["skill_tag"] in overdue_skills:
-        reasons.append("上一日未完成，需要补课" if language == "zh" else "Missed yesterday's block")
+        reasons.append(
+            "上一日未完成，需要补课" if language == "zh" else "Missed yesterday's block"
+        )
     return priority, reasons, recent_accuracy
 
 
@@ -222,22 +224,32 @@ def _compose_strategy_tips(
     if language == "zh":
         tips.append(f"热身：用 2 分钟复盘 {label} 的核心方法，关注 {descriptor_text}。")
         if recency_days and recency_days >= 7:
-            tips.append(f"因为已有 {recency_days} 天未练，前 {max(1, questions // 3)} 题放慢速度，确保审题完整。")
+            tips.append(
+                f"因为已有 {recency_days} 天未练，前 {max(1, questions // 3)} 题放慢速度，确保审题完整。"
+            )
         elif recent_accuracy is not None and recent_accuracy < 0.75:
             tips.append("上一轮正确率偏低，提交答案前检查关键证据或计算步骤。")
         else:
             tips.append("保持节奏：每完成一题立刻写下 5 秒反思，记录易错点。")
-        tips.append(f"目标：{block_minutes} 分钟内攻克 {questions} 题，并挑出至少 1 个错题做深度复盘。")
+        tips.append(
+            f"目标：{block_minutes} 分钟内攻克 {questions} 题，并挑出至少 1 个错题做深度复盘。"
+        )
     else:
-        tips.append(f"Warm-up: spend 2 minutes recalling {label} tactics, especially {descriptor_text}.")
+        tips.append(
+            f"Warm-up: spend 2 minutes recalling {label} tactics, especially {descriptor_text}."
+        )
         if recency_days and recency_days >= 7:
             tips.append(
                 f"It's been {recency_days} days—slow down for the first {max(1, questions // 3)} questions and read carefully."
             )
         elif recent_accuracy is not None and recent_accuracy < 0.75:
-            tips.append("Accuracy was low last time—double-check evidence or calculations before submitting.")
+            tips.append(
+                "Accuracy was low last time—double-check evidence or calculations before submitting."
+            )
         else:
-            tips.append("Keep pace: after each question jot a 5-second note about your reasoning.")
+            tips.append(
+                "Keep pace: after each question jot a 5-second note about your reasoning."
+            )
         tips.append(
             f"Goal: finish {questions} questions in {block_minutes} minutes and pick at least one miss for deep review."
         )
@@ -301,7 +313,9 @@ def _build_blocks_v2(
         section = entry["section"]
         if available_sections and section not in available_sections:
             continue
-        section_deficit = max(section_targets.get(section, 0) - section_assigned.get(section, 0), 0)
+        section_deficit = max(
+            section_targets.get(section, 0) - section_assigned.get(section, 0), 0
+        )
         block_minutes = min(slot_minutes, minutes_remaining)
         if section_deficit > 0:
             block_minutes = min(block_minutes, max(section_deficit, slot_minutes // 2))
@@ -367,7 +381,9 @@ def _build_blocks_v2(
                 "If time remains, redo an older problem to confirm mastery.",
             ]
         )
-        mixed_note = "巩固高频错题" if language == "zh" else "Consolidate frequent misses"
+        mixed_note = (
+            "巩固高频错题" if language == "zh" else "Consolidate frequent misses"
+        )
         blocks.append(
             {
                 "focus_skill": "mixed_review",
@@ -381,7 +397,9 @@ def _build_blocks_v2(
             }
         )
         minutes_remaining -= review_minutes
-        section_assigned[review_section] = section_assigned.get(review_section, 0) + review_minutes
+        section_assigned[review_section] = (
+            section_assigned.get(review_section, 0) + review_minutes
+        )
         section_assigned["mixed"] += review_minutes
 
     if language == "zh":
@@ -420,11 +438,14 @@ def generate_daily_plan(user_id: int, plan_date: date | None = None) -> StudyPla
 
     language = _resolve_language(profile)
     minutes_per_question = current_app.config.get("PLAN_MIN_PER_QUESTION", 5)
-    default_questions = current_app.config.get("PLAN_DEFAULT_QUESTIONS", 12)
-    plan_question_pref = getattr(profile, "daily_plan_questions", None) if profile else None
+    plan_question_pref = (
+        getattr(profile, "daily_plan_questions", None) if profile else None
+    )
     masteries = get_mastery_snapshot(user_id)
     if plan_question_pref:
-        base_minutes = max(plan_question_pref * minutes_per_question, minutes_per_question)
+        base_minutes = max(
+            plan_question_pref * minutes_per_question, minutes_per_question
+        )
         total_minutes = base_minutes
     else:
         base_minutes = (
@@ -434,7 +455,9 @@ def generate_daily_plan(user_id: int, plan_date: date | None = None) -> StudyPla
         )
         total_minutes = _adjust_minutes_for_history(user_id, base_minutes, today)
     section_split = _estimate_section_split(profile)
-    blocks, summary = _build_blocks_v2(user_id, total_minutes, masteries, section_split, today, language)
+    blocks, summary = _build_blocks_v2(
+        user_id, total_minutes, masteries, section_split, today, language
+    )
     target_questions = summary["total_questions"]
 
     detail = {
@@ -472,7 +495,9 @@ def generate_daily_plan(user_id: int, plan_date: date | None = None) -> StudyPla
 
 def get_or_generate_plan(user_id: int, plan_date: date | None = None) -> StudyPlan:
     _ensure_diagnostic_completed(user_id)
-    plan = StudyPlan.query.filter_by(user_id=user_id, plan_date=plan_date or _resolve_today()).first()
+    plan = StudyPlan.query.filter_by(
+        user_id=user_id, plan_date=plan_date or _resolve_today()
+    ).first()
     if plan:
         _ensure_plan_tasks(plan)
         return plan
@@ -510,7 +535,9 @@ def start_plan_task(user_id: int, block_id: str) -> Tuple[StudySession, dict]:
         _ensure_session_question_target(session, task, block)
         return session, serialize_task(task)
 
-    questions = _select_questions_for_block(user_id, block, plan.plan_date, block.get("block_id"))
+    questions = _select_questions_for_block(
+        user_id, block, plan.plan_date, block.get("block_id")
+    )
     if not questions:
         raise BadRequest("No questions available for this block")
 
@@ -529,7 +556,9 @@ def serialize_task(task: StudyPlanTask) -> dict:
     session = task.session
     completed = 0
     if session and session.questions_done:
-        completed = len([entry for entry in session.questions_done if entry.get("log_id")])
+        completed = len(
+            [entry for entry in session.questions_done if entry.get("log_id")]
+        )
     status = task.status
     if session and session.ended_at and status == TASK_ACTIVE:
         status = TASK_COMPLETED
@@ -591,9 +620,11 @@ def _ensure_plan_tasks(plan: StudyPlan) -> None:
 
     existing = {
         task.block_id: task
-        for task in StudyPlanTask.query.filter_by(user_id=plan.user_id, plan_date=plan.plan_date)
+        for task in StudyPlanTask.query.filter_by(
+            user_id=plan.user_id, plan_date=plan.plan_date
+        )
     }
-    for block in (detail.get("blocks") or []):
+    for block in detail.get("blocks") or []:
         block_id = block["block_id"]
         if block_id in existing:
             continue
@@ -611,13 +642,11 @@ def _ensure_plan_tasks(plan: StudyPlan) -> None:
 
 
 def _expire_previous_tasks(user_id: int, today: date) -> None:
-    stale_tasks = (
-        StudyPlanTask.query.filter(
-            StudyPlanTask.user_id == user_id,
-            StudyPlanTask.plan_date < today,
-            StudyPlanTask.status.in_([TASK_PENDING, TASK_ACTIVE]),
-        ).all()
-    )
+    stale_tasks = StudyPlanTask.query.filter(
+        StudyPlanTask.user_id == user_id,
+        StudyPlanTask.plan_date < today,
+        StudyPlanTask.status.in_([TASK_PENDING, TASK_ACTIVE]),
+    ).all()
     if not stale_tasks:
         return
     from . import session_service  # local import to avoid circular dependency
@@ -707,7 +736,9 @@ def _select_questions_for_block(
     )
 
 
-def _create_plan_session(user_id: int, questions: List, plan_block_id: str) -> StudySession:
+def _create_plan_session(
+    user_id: int, questions: List, plan_block_id: str
+) -> StudySession:
     from . import session_service  # local import to avoid circular dependency
 
     return session_service.create_session(
@@ -730,19 +761,23 @@ def _normalize_section(section: str | None) -> str | None:
     return None
 
 
-def _ensure_session_question_target(session: StudySession, task: StudyPlanTask, block: dict) -> None:
+def _ensure_session_question_target(
+    session: StudySession, task: StudyPlanTask, block: dict
+) -> None:
     from . import session_service  # local import to avoid circular dependency
 
-    target = task.questions_target or block.get("questions") or len(session.questions_assigned or [])
+    target = (
+        task.questions_target
+        or block.get("questions")
+        or len(session.questions_assigned or [])
+    )
     assigned = session.questions_assigned or []
     deficit = max(target - len(assigned), 0)
     if deficit <= 0:
         return
 
     existing_ids = {
-        entry.get("question_id")
-        for entry in assigned
-        if entry.get("question_id")
+        entry.get("question_id") for entry in assigned if entry.get("question_id")
     }
 
     additions: List[dict] = []
@@ -760,7 +795,11 @@ def _ensure_session_question_target(session: StudySession, task: StudyPlanTask, 
             include_due=False,  # plan blocks should stay on-focus and new
             log_context={
                 "block_id": block.get("block_id"),
-                "plan_date": (task.plan_date.isoformat() if getattr(task, "plan_date", None) else None),
+                "plan_date": (
+                    task.plan_date.isoformat()
+                    if getattr(task, "plan_date", None)
+                    else None
+                ),
                 "context": "plan_block_top_up",
             },
         )
@@ -780,4 +819,3 @@ def _ensure_session_question_target(session: StudySession, task: StudyPlanTask, 
         session.questions_assigned = assigned + additions
         flag_modified(session, "questions_assigned")
         db.session.commit()
-

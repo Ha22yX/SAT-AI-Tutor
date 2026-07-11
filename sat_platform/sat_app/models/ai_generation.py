@@ -19,11 +19,13 @@ class AIPaperJob(db.Model):
     config = db.Column(db.JSON, nullable=False, default=dict)
     error = db.Column(db.Text, nullable=True)
     status_message = db.Column(db.Text, nullable=True)
-    source_id = db.Column(db.Integer, db.ForeignKey("question_sources.id"), nullable=True)
+    source_id = db.Column(
+        db.Integer, db.ForeignKey("question_sources.id"), nullable=True
+    )
     created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     source = db.relationship("QuestionSource", backref="ai_jobs", lazy=True)
-
-

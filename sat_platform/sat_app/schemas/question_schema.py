@@ -10,7 +10,9 @@ SECTION_CHOICES = ("RW", "Math")
 class PassageSchema(Schema):
     id = fields.Integer(dump_only=True)
     content_text = fields.String(required=True)
-    metadata = fields.Dict(attribute="metadata_json", data_key="metadata", load_default=None)
+    metadata = fields.Dict(
+        attribute="metadata_json", data_key="metadata", load_default=None
+    )
 
 
 class QuestionSourceSchema(Schema):
@@ -29,7 +31,9 @@ class QuestionCreateSchema(Schema):
     stem_text = fields.String(required=True)
     choices = fields.Dict(required=True)
     correct_answer = fields.Dict(required=True)
-    difficulty_level = fields.Integer(validate=validate.Range(min=1, max=5), allow_none=True, load_default=None)
+    difficulty_level = fields.Integer(
+        validate=validate.Range(min=1, max=5), allow_none=True, load_default=None
+    )
     irt_a = fields.Float(allow_none=True)
     irt_b = fields.Float(allow_none=True)
     skill_tags = fields.List(fields.String())
@@ -40,7 +44,9 @@ class QuestionCreateSchema(Schema):
     source_page = fields.Integer(allow_none=True, load_default=None)
     page = fields.String(allow_none=True, load_default=None)
     index_in_set = fields.Integer(allow_none=True, load_default=None)
-    metadata = fields.Dict(attribute="metadata_json", data_key="metadata", load_default=None)
+    metadata = fields.Dict(
+        attribute="metadata_json", data_key="metadata", load_default=None
+    )
     has_figure = fields.Boolean(load_default=False)
     # Optional hint from ingestion: which choices require a figure/table capture.
     choice_figure_keys = fields.List(fields.String(), load_default=list)
@@ -55,4 +61,3 @@ class QuestionSchema(QuestionCreateSchema):
     updated_at = fields.DateTime(dump_only=True)
     passage = fields.Nested(PassageSchema, dump_only=True)
     source = fields.Nested(QuestionSourceSchema, dump_only=True)
-

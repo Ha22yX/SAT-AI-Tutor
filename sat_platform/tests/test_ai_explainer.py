@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from sat_app.extensions import db
 from sat_app.models import Question
 
@@ -30,7 +29,12 @@ def test_ai_explain_endpoint(client, student_token, question_id, monkeypatch):
         "question_id": question_id,
         "answer_correct": True,
         "explanation_blocks": [
-            {"language": "bilingual", "text_en": "mock", "text_zh": "mock", "related_parts": []}
+            {
+                "language": "bilingual",
+                "text_en": "mock",
+                "text_zh": "mock",
+                "related_parts": [],
+            }
         ],
     }
 
@@ -69,7 +73,9 @@ def _prepare_session_and_log(client, token):
     return question_entry["question_id"], answer["log_id"]
 
 
-def test_ai_explain_detail_does_not_generate(client, student_token, question_id, monkeypatch):
+def test_ai_explain_detail_does_not_generate(
+    client, student_token, question_id, monkeypatch
+):
     question_id, log_id = _prepare_session_and_log(client, student_token)
     called = {"count": 0}
 
@@ -77,7 +83,9 @@ def test_ai_explain_detail_does_not_generate(client, student_token, question_id,
         called["count"] += 1
         raise AssertionError("generate_explanation should not be called")
 
-    monkeypatch.setattr("sat_app.services.ai_explainer.generate_explanation", _should_not_run)
+    monkeypatch.setattr(
+        "sat_app.services.ai_explainer.generate_explanation", _should_not_run
+    )
     resp = client.post(
         "/api/ai/explain/detail",
         json={"question_id": question_id, "log_id": log_id},
@@ -91,7 +99,9 @@ def test_ai_explain_detail_does_not_generate(client, student_token, question_id,
     assert called["count"] == 0
 
 
-def test_ai_explain_generate_then_detail(client, student_token, question_id, monkeypatch):
+def test_ai_explain_generate_then_detail(
+    client, student_token, question_id, monkeypatch
+):
     question_id, log_id = _prepare_session_and_log(client, student_token)
     calls = {"count": 0}
     fake_payload = {
@@ -105,7 +115,9 @@ def test_ai_explain_generate_then_detail(client, student_token, question_id, mon
         calls["count"] += 1
         return fake_payload
 
-    monkeypatch.setattr("sat_app.services.ai_explainer.generate_explanation", _fake_generate)
+    monkeypatch.setattr(
+        "sat_app.services.ai_explainer.generate_explanation", _fake_generate
+    )
     resp = client.post(
         "/api/ai/explain/generate",
         json={"question_id": question_id, "log_id": log_id},
@@ -121,4 +133,3 @@ def test_ai_explain_generate_then_detail(client, student_token, question_id, mon
     ).get_json()
     assert detail["ai_explanation"]["protocol_version"] == "1.0"
     assert detail["meta"]["has_ai_explanation"] is True
-

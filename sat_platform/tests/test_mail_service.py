@@ -3,7 +3,6 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 import pytest
-
 from sat_app.services import mail_service
 
 
@@ -27,7 +26,9 @@ def _stub_connection(sentinel):
 
 def test_send_email_builds_message(monkeypatch, app_with_db):
     captured = {}
-    monkeypatch.setattr(mail_service, "_smtp_connection", lambda config: _stub_connection(captured))
+    monkeypatch.setattr(
+        mail_service, "_smtp_connection", lambda config: _stub_connection(captured)
+    )
 
     app_with_db.config.update(
         {
@@ -85,4 +86,3 @@ def test_send_email_requires_body(app_with_db):
     with app_with_db.app_context():
         with pytest.raises(ValueError):
             mail_service.send_email(to="student@example.com", subject="oops")
-

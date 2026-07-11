@@ -17,11 +17,12 @@ def sign_payload(secret: str, salt: str, payload: Dict[str, Any]) -> str:
     return _serializer(secret, salt).dumps(payload)
 
 
-def verify_payload(token: str, secret: str, salt: str, *, max_age: int) -> Dict[str, Any]:
+def verify_payload(
+    token: str, secret: str, salt: str, *, max_age: int
+) -> Dict[str, Any]:
     """Verify and return the payload or raise a signature error."""
 
     try:
         return _serializer(secret, salt).loads(token, max_age=max_age)
     except (BadSignature, BadTimeSignature) as exc:
         raise exc
-

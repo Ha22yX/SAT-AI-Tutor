@@ -10,7 +10,12 @@ from flask import current_app
 from ..extensions import db
 from ..models import Question, SkillMastery, UserQuestionLog
 from . import spaced_repetition
-from .skill_taxonomy import canonicalize_tag, canonicalize_tags, describe_skill, iter_skill_tags
+from .skill_taxonomy import (
+    canonicalize_tag,
+    canonicalize_tags,
+    describe_skill,
+    iter_skill_tags,
+)
 
 
 def _is_question_valid(question: Question | None) -> bool:
@@ -66,7 +71,8 @@ def load_user_mastery(user_id: int) -> Dict[str, SkillMastery]:
         survivor.mastery_score = (survivor.mastery_score + record.mastery_score) / 2
         survivor.success_streak = max(survivor.success_streak, record.success_streak)
         if record.last_practiced_at and (
-            not survivor.last_practiced_at or record.last_practiced_at > survivor.last_practiced_at
+            not survivor.last_practiced_at
+            or record.last_practiced_at > survivor.last_practiced_at
         ):
             survivor.last_practiced_at = record.last_practiced_at
         duplicates.append(record)
@@ -92,7 +98,9 @@ def get_mastery_snapshot(user_id: int) -> list[dict]:
     }
 
     for tag, record in mastery_map.items():
-        bucket = aggregates.setdefault(tag, {"score_sum": 0.0, "count": 0, "success_streak": 0, "last": None})
+        bucket = aggregates.setdefault(
+            tag, {"score_sum": 0.0, "count": 0, "success_streak": 0, "last": None}
+        )
         bucket["score_sum"] += record.mastery_score
         bucket["count"] += 1
         bucket["success_streak"] = max(bucket["success_streak"], record.success_streak)
@@ -107,7 +115,9 @@ def get_mastery_snapshot(user_id: int) -> list[dict]:
         meta = describe_skill(tag)
         count = bucket["count"]
         observed_score = bucket["score_sum"] / count if count else None
-        fallback_score = observed_score if observed_score is not None else _initial_mastery()
+        fallback_score = (
+            observed_score if observed_score is not None else _initial_mastery()
+        )
         snapshot.append(
             {
                 "skill_tag": tag,
@@ -119,7 +129,9 @@ def get_mastery_snapshot(user_id: int) -> list[dict]:
                 "has_data": bool(count),
                 "sample_count": count,
                 "success_streak": bucket["success_streak"] if count else 0,
-                "last_practiced_at": bucket["last"].isoformat() if bucket["last"] else None,
+                "last_practiced_at": (
+                    bucket["last"].isoformat() if bucket["last"] else None
+                ),
             }
         )
     return snapshot
@@ -304,4 +316,3 @@ def _build_summary_bias(summary: dict | None) -> Dict[str, float]:
         if delta:
             bias_map[tag] = delta * bias_strength
     return bias_map
-

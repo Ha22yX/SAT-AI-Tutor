@@ -5,16 +5,16 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-import pytest
-
-from sat_app import create_app
-from sat_app.extensions import db
-from sat_app.models import User, EmailVerificationTicket
-from sat_app.utils.security import hash_password
+from sat_app import create_app  # noqa: E402
+from sat_app.extensions import db  # noqa: E402
+from sat_app.models import EmailVerificationTicket, User  # noqa: E402
+from sat_app.utils.security import hash_password  # noqa: E402
 
 
 @pytest.fixture()

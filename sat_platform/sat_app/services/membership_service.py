@@ -99,7 +99,9 @@ def describe_ai_quota(user: User) -> dict:
     used = user.ai_explain_quota_used or 0
     if user.ai_explain_quota_date != today:
         used = 0
-    resets_at = datetime.combine(today + timedelta(days=1), time(0, 0), tzinfo=timezone.utc)
+    resets_at = datetime.combine(
+        today + timedelta(days=1), time(0, 0), tzinfo=timezone.utc
+    )
     return {
         "limit": _ai_quota_limit(),
         "used": used,
@@ -129,7 +131,9 @@ def consume_ai_explain_quota(user: User) -> dict:
     return describe_ai_quota(user)
 
 
-def extend_membership(user: User, days: int, operator_id: int | None = None, note: str | None = None) -> dict:
+def extend_membership(
+    user: User, days: int, operator_id: int | None = None, note: str | None = None
+) -> dict:
     if days <= 0:
         raise ValueError("days must be positive")
     now = _now()
@@ -151,7 +155,10 @@ def extend_membership(user: User, days: int, operator_id: int | None = None, not
 
 
 def set_membership_days(
-    user: User, days: int | None, operator_id: int | None = None, note: str | None = None
+    user: User,
+    days: int | None,
+    operator_id: int | None = None,
+    note: str | None = None,
 ) -> dict:
     if days is None:
         user.membership_expires_at = None
@@ -217,19 +224,26 @@ def plan_definitions() -> dict[str, dict]:
     return {
         "monthly": {
             "days": current_app.config.get("MEMBERSHIP_MONTHLY_DAYS", 30),
-            "price_cents": current_app.config.get("MEMBERSHIP_MONTHLY_PRICE_CENTS", 3900),
+            "price_cents": current_app.config.get(
+                "MEMBERSHIP_MONTHLY_PRICE_CENTS", 3900
+            ),
         },
         "quarterly": {
             "days": current_app.config.get("MEMBERSHIP_QUARTERLY_DAYS", 90),
-            "price_cents": current_app.config.get("MEMBERSHIP_QUARTERLY_PRICE_CENTS", 9900),
+            "price_cents": current_app.config.get(
+                "MEMBERSHIP_QUARTERLY_PRICE_CENTS", 9900
+            ),
         },
     }
 
 
-def apply_plan(user: User, plan: str, operator_id: int | None = None, note: str | None = None) -> dict:
+def apply_plan(
+    user: User, plan: str, operator_id: int | None = None, note: str | None = None
+) -> dict:
     definitions = plan_definitions()
     definition = definitions.get(plan)
     if not definition:
         raise ValueError(f"Unknown plan {plan}")
-    return extend_membership(user, definition["days"], operator_id=operator_id, note=note or plan)
-
+    return extend_membership(
+        user, definition["days"], operator_id=operator_id, note=note or plan
+    )

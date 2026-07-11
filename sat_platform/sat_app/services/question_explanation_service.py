@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from typing import Iterable
+import time
 from types import SimpleNamespace
+from typing import Iterable
 
 from flask import current_app
+from sqlalchemy.exc import OperationalError
 
 from ..extensions import db
 from ..models import Question, QuestionExplanationCache
 from . import ai_explainer
-from sqlalchemy.exc import OperationalError
-import time
 
 DEFAULT_LANGUAGES = ("en", "zh")
 
@@ -58,14 +58,17 @@ def ensure_explanations_for_languages(
     results: dict[str, QuestionExplanationCache] = {}
     for lang in langs:
         try:
-            results[lang] = ensure_explanation(question=question, language=lang, source=source)
-        except ai_explainer.AiExplainerError as exc:  # pragma: no cover - defensive logging
+            results[lang] = ensure_explanation(
+                question=question, language=lang, source=source
+            )
+        except (
+            ai_explainer.AiExplainerError
+        ) as exc:  # pragma: no cover - defensive logging
             current_app.logger.warning(
                 "Skipping explanation generation due to AI error",
                 extra={"question_id": question.id, "language": lang, "error": str(exc)},
             )
         except Exception as exc:  # pragma: no cover - defensive logging
-            db.session.rollback()
             current_app.logger.exception(
                 "Failed to generate explanation",
                 extra={"question_id": question.id, "language": lang, "error": str(exc)},
@@ -99,7 +102,12 @@ def _commit_with_retry(attempts: int = 5, base_delay: float = 0.2) -> None:
 
 class _PayloadQuestion:
     def __init__(self, payload: dict):
-        self.id = payload.get("id") or payload.get("question_uid") or payload.get("source_question_number") or 0
+        self.id = (
+            payload.get("id")
+            or payload.get("question_uid")
+            or payload.get("source_question_number")
+            or 0
+        )
         self.section = payload.get("section") or "RW"
         self.sub_section = payload.get("sub_section")
         self.question_type = payload.get("question_type") or "choice"
@@ -108,7 +116,9 @@ class _PayloadQuestion:
         self.choices = payload.get("choices") or {}
         self.correct_answer = payload.get("correct_answer") or {}
         self.skill_tags = payload.get("skill_tags") or []
-        self.metadata_json = payload.get("metadata") or payload.get("metadata_json") or {}
+        self.metadata_json = (
+            payload.get("metadata") or payload.get("metadata_json") or {}
+        )
         if not isinstance(self.metadata_json, dict):
             self.metadata_json = {}
         self.has_figure = bool(payload.get("has_figure"))
@@ -139,23 +149,38 @@ class _PayloadQuestion:
         passage_payload = payload.get("passage")
         passage_text = None
         if isinstance(passage_payload, dict):
-            passage_text = passage_payload.get("content_text") or passage_payload.get("text")
+            passage_text = passage_payload.get("content_text") or passage_payload.get(
+                "text"
+            )
         if not passage_text:
-            passage_text = self.metadata_json.get("passage_text") or self.metadata_json.get("passage_excerpt")
-        self.passage = SimpleNamespace(content_text=passage_text) if passage_text else None
+            passage_text = self.metadata_json.get(
+                "passage_text"
+            ) or self.metadata_json.get("passage_excerpt")
+        self.passage = (
+            SimpleNamespace(content_text=passage_text) if passage_text else None
+        )
 
 
-def generate_explanations_for_payload(payload: dict, languages: Iterable[str] | None = None) -> dict[str, dict]:
+def generate_explanations_for_payload(
+    payload: dict, languages: Iterable[str] | None = None
+) -> dict[str, dict]:
     question_like = _PayloadQuestion(payload)
     figures: list[dict] = []
     if question_like.has_figure and question_like.page_image_b64:
-        figures.append({"id": "page", "description": "page_image", "image_url": question_like.page_image_b64})
+        figures.append(
+            {
+                "id": "page",
+                "description": "page_image",
+                "image_url": question_like.page_image_b64,
+            }
+        )
     if question_like.figures:
         figures.extend(question_like.figures)
     # If has_figure but no usable image, log to aid debugging
     if question_like.has_figure and not figures:
         current_app.logger.warning(
-            "AI explanation: has_figure but no images available", extra={"question_id": question_like.id}
+            "AI explanation: has_figure but no images available",
+            extra={"question_id": question_like.id},
         )
     langs = list(languages or DEFAULT_LANGUAGES)
     results: dict[str, dict] = {}
@@ -191,4 +216,3 @@ def store_precomputed_explanations(
         db.session.add(record)
         stored[lang] = record
     return stored
-

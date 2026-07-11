@@ -5,9 +5,9 @@ Revises: 121dc0b3b0d8
 Create Date: 2025-12-07 06:30:00.000000
 
 """
-from alembic import op
-import sqlalchemy as sa
 
+import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "4f7bf0b3b486"
@@ -18,7 +18,9 @@ depends_on = None
 
 def upgrade():
     with op.batch_alter_table("user_profiles") as batch_op:
-        batch_op.add_column(sa.Column("daily_plan_questions", sa.Integer(), nullable=True))
+        batch_op.add_column(
+            sa.Column("daily_plan_questions", sa.Integer(), nullable=True)
+        )
 
     connection = op.get_bind()
     connection.execute(
@@ -39,4 +41,3 @@ def upgrade():
 def downgrade():
     with op.batch_alter_table("user_profiles") as batch_op:
         batch_op.drop_column("daily_plan_questions")
-

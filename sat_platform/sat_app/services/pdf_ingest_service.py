@@ -1,34 +1,38 @@
-
 """Two-stage PDF ingest (sequential): page extraction -> per-question enrichment (normalize/solve/explain)."""
 
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import json
 import threading
 import time
-import hashlib
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from collections import defaultdict, deque
+from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Literal
+from typing import Any, Callable, Dict, List, Literal, Optional
 
 import pdfplumber
 import requests
 from flask import current_app
 
-from ..schemas.question_schema import QuestionCreateSchema
 from ..models import Question
+from ..schemas.question_schema import QuestionCreateSchema
+from . import ai_explainer, question_explanation_service
 from .openai_log import log_event
 from .skill_taxonomy import canonicalize_tags, iter_skill_tags
-from .validation_service import validate_question, record_issues
-from . import ai_explainer
-from . import question_explanation_service
+from .validation_service import record_issues, validate_question
 
 ProgressCallback = Callable[[int, int, int, Optional[str]], None]
 AttemptHook = Callable[
-    [Literal["start", "retry", "success", "heartbeat"], int, int, float, Optional[Exception]],
+    [
+        Literal["start", "retry", "success", "heartbeat"],
+        int,
+        int,
+        float,
+        Optional[Exception],
+    ],
     None,
 ]
 
@@ -64,13 +68,14 @@ MATH_SOP = (
     "(6) Takeaway rule for similar problems."
 )
 
+
 def _build_normalize_system_prompt(section_hint: str | None) -> str:
     is_math = str(section_hint or "").lower().startswith("math")
     if is_math:
         return (
             "You are an SAT Math normalizer. Convert extracted snippets into the platform JSON schema. "
             "Return exactly one JSON object with:\n"
-            "- section: \"Math\"; sub_section optional/null.\n"
+            '- section: "Math"; sub_section optional/null.\n'
             "- passage: ONLY supporting prose; never copy figure/table text. Null if none. "
             "If the source passage has underlined fragments, wrap only those fragments as "
             "<underline>...</underline>. Use <highlight>...</highlight> only for true highlighted text, "
@@ -78,13 +83,13 @@ def _build_normalize_system_prompt(section_hint: str | None) -> str:
             "- stem_text: ONLY the interrogative part. Preserve LaTeX/advanced notation ($...$, \\(...\\), $$...$$, "
             "\\frac, \\sqrt, exponents, subscripts, inequalities, vectors, absolute value | |, summations, limits). Do not simplify.\n"
             "- choices: object with capital-letter keys. If the page shows no lettered options, set {} (treat as SPR/fill).\n"
-            "- question_type: \"choice\" when valid lettered options exist, otherwise \"fill\" (SPR).\n"
-            "- correct_answer: {\"value\": \"A\"} for MCQ or {\"value\": \"2/3\"} for fill.\n"
-            "- answer_schema (fill only): {\"type\": \"numeric\"|\"text\", \"acceptable\": [...], \"tolerance\": number|null, "
-            "\"allow_fraction\": true, \"allow_pi\": true, \"strip_spaces\": true}. List EVERY scoring-equivalent form within grid rules "
+            '- question_type: "choice" when valid lettered options exist, otherwise "fill" (SPR).\n'
+            '- correct_answer: {"value": "A"} for MCQ or {"value": "2/3"} for fill.\n'
+            '- answer_schema (fill only): {"type": "numeric"|"text", "acceptable": [...], "tolerance": number|null, '
+            '"allow_fraction": true, "allow_pi": true, "strip_spaces": true}. List EVERY scoring-equivalent form within grid rules '
             "(≤5 chars; decimal point counts; leading minus does not). Include fraction + short decimals (e.g., 2/3, 0.666, .6666, .6667) and π/radical forms if applicable.\n"
             "- has_figure: true if passage/stem relies on a figure/table/image (not options). choice_figure_keys: letters whose option has its own figure; else [].\n"
-            "- difficulty_level: 1-5 with difficulty_assessment {\"level\":3,\"expected_time_sec\":75,\"rationale\":\"...\"}.\n"
+            '- difficulty_level: 1-5 with difficulty_assessment {"level":3,"expected_time_sec":75,"rationale":"..."}.\n'
             f"- skill_tags: choose 1-2 from exactly: {SKILL_TAG_PROMPT}. {MATH_DOMAIN_MAP}\n"
             "  Math routing rubric:\n"
             "  * M_Algebra: linear equations/systems/inequalities, linear functions, slope/intercept.\n"
@@ -101,16 +106,16 @@ def _build_normalize_system_prompt(section_hint: str | None) -> str:
     return (
         "You are an SAT Reading & Writing normalizer. Convert extracted snippets into the canonical JSON schema. "
         "Return exactly one JSON object with:\n"
-        "- section: \"RW\"; sub_section optional/null.\n"
+        '- section: "RW"; sub_section optional/null.\n'
         "- passage: ONLY supporting prose; do NOT copy tables/figures or the question sentence. Null if none. "
         "If the passage contains underlined fragments, wrap those exact spans using "
         "<underline>...</underline>. Use <highlight>...</highlight> only for highlighted text.\n"
-        "- stem_text: ONLY the interrogative part (e.g., \"Which choice ...?\").\n"
-        "- choices: object with capital-letter keys. If no valid lettered options exist, set {} and question_type must be \"fill\".\n"
-        "- question_type: \"choice\" for MCQ else \"fill\".\n"
-        "- correct_answer: {\"value\": \"A\"} for MCQ or {\"value\": \"text\"} for fill.\n"
-        "- answer_schema (fill only): {\"type\": \"text\"|\"numeric\", \"acceptable\": [...], \"tolerance\": number|null, "
-        "\"allow_fraction\": true, \"allow_pi\": true, \"strip_spaces\": true}. Include all scoring-equivalent forms if known.\n"
+        '- stem_text: ONLY the interrogative part (e.g., "Which choice ...?").\n'
+        '- choices: object with capital-letter keys. If no valid lettered options exist, set {} and question_type must be "fill".\n'
+        '- question_type: "choice" for MCQ else "fill".\n'
+        '- correct_answer: {"value": "A"} for MCQ or {"value": "text"} for fill.\n'
+        '- answer_schema (fill only): {"type": "text"|"numeric", "acceptable": [...], "tolerance": number|null, '
+        '"allow_fraction": true, "allow_pi": true, "strip_spaces": true}. Include all scoring-equivalent forms if known.\n'
         "- has_figure: true if passage/stem references a figure/table/image (not options). choice_figure_keys: letters whose option contains its own figure/table; else [].\n"
         "- difficulty_level 1-5 with difficulty_assessment; keep concise rationale.\n"
         f"- skill_tags: choose 1-2 from exactly: {SKILL_TAG_PROMPT}.\n"
@@ -133,14 +138,15 @@ def _build_solver_system_prompt(section_hint: str | None) -> str:
         return (
             "You are an SAT Math solving assistant. Determine the single best answer choice.\n"
             f"{MATH_ROUTE_RULES} {MATH_MC_RULES}\n"
-            "Return JSON: {\"answer_value\": \"A\", \"solution\": \"step-by-step reasoning\"}. "
+            'Return JSON: {"answer_value": "A", "solution": "step-by-step reasoning"}. '
             "Keep exact symbolic forms when needed; answer_value must be one of the provided choice letters."
         )
     return (
         "You are an SAT Reading & Writing solving assistant. Choose the best answer based on evidence, logic, and clarity. "
         "Highlight why the selected option fits and others fail (unsupported, scope shift, grammar/clarity issues). "
-        "Return JSON: {\"answer_value\": \"A\", \"solution\": \"brief reasoning\"}. answer_value must be one of the provided choice letters."
+        'Return JSON: {"answer_value": "A", "solution": "brief reasoning"}. answer_value must be one of the provided choice letters.'
     )
+
 
 # ---------------- Rate limiting (best-effort, client-side) ----------------
 _rate_lock = threading.Lock()
@@ -148,7 +154,9 @@ _rate_window_minute: dict[str, deque] = defaultdict(deque)
 _rate_window_second: dict[str, deque] = defaultdict(deque)
 
 
-def _compute_coarse_uid(job_id: int | None, page_index: int, local_idx: int, payload: dict) -> str:
+def _compute_coarse_uid(
+    job_id: int | None, page_index: int, local_idx: int, payload: dict
+) -> str:
     """Deterministic coarse_uid so resumes can match the same question."""
     base = f"J{job_id or 'NA'}-P{page_index}-Q{local_idx}"
     sig_src = json.dumps(
@@ -229,7 +237,9 @@ def ingest_pdf_document(
         except Exception:
             continue
 
-    pages = _extract_pages_seq(path, start_page=start_page, end_page=end_page, progress_cb=progress_cb)
+    pages = _extract_pages_seq(
+        path, start_page=start_page, end_page=end_page, progress_cb=progress_cb
+    )
     total_pages_span = max(
         base_pages_completed + len(pages),
         max_cached_page,
@@ -237,7 +247,12 @@ def ingest_pdf_document(
         total_pages_hint or 0,
     )
     if progress_cb:
-        progress_cb(base_pages_completed, total_pages_span, base_questions, "Starting PDF ingestion")
+        progress_cb(
+            base_pages_completed,
+            total_pages_span,
+            base_questions,
+            "Starting PDF ingestion",
+        )
     for p in pages:
         idx = p["page_index"]
         coarse = _extract_coarse_questions(p, job_id=job_id)
@@ -263,13 +278,17 @@ def ingest_pdf_document(
     normalized_items: List[dict] = []
     for idx, it in enumerate(cached_items, start=1):
         if not it.get("coarse_uid"):
-            it["coarse_uid"] = _compute_coarse_uid(job_id, int(it.get("page") or it.get("page_index") or 0), idx, it)
+            it["coarse_uid"] = _compute_coarse_uid(
+                job_id, int(it.get("page") or it.get("page_index") or 0), idx, it
+            )
         it["status"] = (it.get("status") or "pending").lower()
         normalized_items.append(it)
     cached_items = normalized_items
 
     # Prefer status-based skipping: completed/explained items are skipped. Fall back to legacy skip count.
-    remaining_items = [it for it in cached_items if it.get("status") not in ("explained", "completed")]
+    remaining_items = [
+        it for it in cached_items if it.get("status") not in ("explained", "completed")
+    ]
     if remaining_items:
         cached_items = remaining_items
     elif skip_normalized_count > 0 and cached_items:
@@ -376,7 +395,10 @@ def _extract_coarse_questions(page: dict, *, job_id: int | None) -> List[dict]:
                             "type": "array",
                             "items": {
                                 "type": "object",
-                                "properties": {"label": {"type": "string"}, "text": {"type": "string"}},
+                                "properties": {
+                                    "label": {"type": "string"},
+                                    "text": {"type": "string"},
+                                },
                                 "required": ["label", "text"],
                             },
                         },
@@ -399,7 +421,7 @@ def _extract_coarse_questions(page: dict, *, job_id: int | None) -> List[dict]:
         f"- skill_tags: up to two from: {SKILL_TAG_PROMPT}; else [].\n"
         "- If source passage has underlined text, preserve it inline in `passage` as <underline>...</underline>. "
         "Use <highlight>...</highlight> only for truly highlighted text.\n"
-        "If no questions: {\"questions\": []}. No commentary."
+        'If no questions: {"questions": []}. No commentary.'
     )
     user_prompt = f"You are examining page {page_index} of an SAT prep PDF. Return JSON matching:\n{schema_hint}\nStrict JSON only."
 
@@ -415,7 +437,10 @@ def _extract_coarse_questions(page: dict, *, job_id: int | None) -> List[dict]:
             current_app.config.get("AI_MODEL_NAME", "gpt-5.4"),
         ),
         "input": [
-            {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+            {
+                "role": "system",
+                "content": [{"type": "input_text", "text": system_prompt}],
+            },
             {"role": "user", "content": user_content},
         ],
         "temperature": 0.1,
@@ -482,7 +507,9 @@ def _enrich_item(item: dict, *, job_id: int | None) -> dict | None:
     if solved and solved.get("answer_value"):
         normalized.setdefault("correct_answer", {})["value"] = solved["answer_value"]
         # Deliberately drop solver's solution text; only keep the final answer
-        current_app.logger.info("Solve done", extra={**ctx, "answer": solved.get("answer_value")})
+        current_app.logger.info(
+            "Solve done", extra={**ctx, "answer": solved.get("answer_value")}
+        )
         item["status"] = "solved"
     else:
         current_app.logger.warning("Solve failed or empty", extra=ctx)
@@ -513,10 +540,12 @@ def _enrich_item(item: dict, *, job_id: int | None) -> dict | None:
                 },
             )
             # Optional strict mode: reject items AI review flags as inaccurate.
-            if bool(current_app.config.get("AI_EXTRACTION_REVIEW_STRICT", False)) and not bool(
-                review.get("accepted")
-            ):
-                current_app.logger.warning("Review rejected item in strict mode", extra=ctx)
+            if bool(
+                current_app.config.get("AI_EXTRACTION_REVIEW_STRICT", False)
+            ) and not bool(review.get("accepted")):
+                current_app.logger.warning(
+                    "Review rejected item in strict mode", extra=ctx
+                )
                 return None
         else:
             current_app.logger.warning("Review returned empty", extra=ctx)
@@ -533,13 +562,17 @@ def _enrich_item(item: dict, *, job_id: int | None) -> dict | None:
                 current_app.config.get("AI_TIMEOUT_SECONDS", 120),
             )
         )
-        explain_timeout_per_lang = float(current_app.config.get("AI_EXPLAIN_TIMEOUT_SEC", ai_read_timeout))
+        explain_timeout_per_lang = float(
+            current_app.config.get("AI_EXPLAIN_TIMEOUT_SEC", ai_read_timeout)
+        )
         # Allow time per language/version instead of a single shared budget.
         langs_cfg = current_app.config.get("AI_EXPLAIN_LANGUAGES")
         if isinstance(langs_cfg, (list, tuple)) and langs_cfg:
             lang_count = len(langs_cfg)
         else:
-            lang_count = len(getattr(question_explanation_service, "DEFAULT_LANGUAGES", ["en", "zh"]))
+            lang_count = len(
+                getattr(question_explanation_service, "DEFAULT_LANGUAGES", ["en", "zh"])
+            )
         explain_timeout = explain_timeout_per_lang * max(1, lang_count)
         # Small overhead buffer so coordination code has time to join/log.
         explain_timeout += min(10.0, explain_timeout_per_lang * 0.25)
@@ -547,13 +580,20 @@ def _enrich_item(item: dict, *, job_id: int | None) -> dict | None:
 
         def _gen_expl(payload: dict):
             with app_obj.app_context():
-                return question_explanation_service.generate_explanations_for_payload(payload)
+                return question_explanation_service.generate_explanations_for_payload(
+                    payload
+                )
 
         try:
             explain_started = time.perf_counter()
             current_app.logger.info(
                 "Explain start",
-                extra={**ctx, "has_figure": has_fig, "choice_figs": bool(choice_figs), "timeout": explain_timeout},
+                extra={
+                    **ctx,
+                    "has_figure": has_fig,
+                    "choice_figs": bool(choice_figs),
+                    "timeout": explain_timeout,
+                },
             )
 
             result_box: dict[str, Any] = {}
@@ -567,7 +607,9 @@ def _enrich_item(item: dict, *, job_id: int | None) -> dict | None:
                         meta_for_expl.setdefault("metadata", {})
                         if not isinstance(meta_for_expl["metadata"], dict):
                             meta_for_expl["metadata"] = {}
-                        meta_for_expl["metadata"]["page_image_b64"] = item.get("page_image_b64")
+                        meta_for_expl["metadata"]["page_image_b64"] = item.get(
+                            "page_image_b64"
+                        )
                     result_box["expl"] = _gen_expl(meta_for_expl)
                 except Exception as exc:  # pragma: no cover - defensive
                     exc_box["exc"] = exc
@@ -585,7 +627,12 @@ def _enrich_item(item: dict, *, job_id: int | None) -> dict | None:
                 current_app.logger.warning(
                     "Explanation generation timed out after %.0fs",
                     explain_timeout,
-                    extra={**ctx, "elapsed_ms": int((time.perf_counter() - explain_started) * 1000)},
+                    extra={
+                        **ctx,
+                        "elapsed_ms": int(
+                            (time.perf_counter() - explain_started) * 1000
+                        ),
+                    },
                 )
             elif "exc" in exc_box:
                 current_app.logger.warning(
@@ -593,7 +640,9 @@ def _enrich_item(item: dict, *, job_id: int | None) -> dict | None:
                     extra={
                         **ctx,
                         "error": str(exc_box["exc"]),
-                        "elapsed_ms": int((time.perf_counter() - explain_started) * 1000),
+                        "elapsed_ms": int(
+                            (time.perf_counter() - explain_started) * 1000
+                        ),
                     },
                 )
             else:
@@ -607,17 +656,30 @@ def _enrich_item(item: dict, *, job_id: int | None) -> dict | None:
                     item["status"] = "explained"
                     current_app.logger.info(
                         "Explain done",
-                        extra={**ctx, "elapsed_ms": int((time.perf_counter() - explain_started) * 1000)},
+                        extra={
+                            **ctx,
+                            "elapsed_ms": int(
+                                (time.perf_counter() - explain_started) * 1000
+                            ),
+                        },
                     )
                 else:
                     current_app.logger.warning(
                         "Explanation generation returned empty result",
-                        extra={**ctx, "elapsed_ms": int((time.perf_counter() - explain_started) * 1000)},
+                        extra={
+                            **ctx,
+                            "elapsed_ms": int(
+                                (time.perf_counter() - explain_started) * 1000
+                            ),
+                        },
                     )
         except ai_explainer.AiExplainerError:
             current_app.logger.warning(
                 "Explanation skipped due to AI error",
-                extra={**ctx, "elapsed_ms": int((time.perf_counter() - explain_started) * 1000)},
+                extra={
+                    **ctx,
+                    "elapsed_ms": int((time.perf_counter() - explain_started) * 1000),
+                },
             )
         except Exception:
             current_app.logger.exception("Explanation generation failed")
@@ -644,7 +706,9 @@ def _enrich_item(item: dict, *, job_id: int | None) -> dict | None:
         if "metadata" in temp_for_validation and "metadata_json" in model_columns:
             temp_for_validation["metadata_json"] = temp_for_validation.pop("metadata")
         # Keep only actual model columns (drop extras like choice_figure_keys)
-        temp_for_validation = {k: v for k, v in temp_for_validation.items() if k in model_columns}
+        temp_for_validation = {
+            k: v for k, v in temp_for_validation.items() if k in model_columns
+        }
         temp_question = Question(**temp_for_validation)
         valid, issues = validate_question(temp_question)
         if not valid:
@@ -726,7 +790,10 @@ def _review_extraction_quality(
             current_app.config.get("AI_MODEL_NAME", "gpt-5.4"),
         ),
         "input": [
-            {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+            {
+                "role": "system",
+                "content": [{"type": "input_text", "text": system_prompt}],
+            },
             {"role": "user", "content": user_content},
         ],
         "temperature": 0.1,
@@ -751,7 +818,11 @@ def _review_extraction_quality(
         except Exception:
             confidence = 0.0
         issues = data.get("issues") if isinstance(data.get("issues"), list) else []
-        fixes = data.get("fix_suggestions") if isinstance(data.get("fix_suggestions"), list) else []
+        fixes = (
+            data.get("fix_suggestions")
+            if isinstance(data.get("fix_suggestions"), list)
+            else []
+        )
         return {
             "accepted": accepted,
             "confidence": max(0.0, min(1.0, confidence)),
@@ -769,7 +840,9 @@ def _normalize_question_item(item: dict, *, job_id: int | None) -> dict | None:
     passage = item.get("passage") or ""
     # Fallback to stem_text when prompt is absent to avoid empty normalization input
     prompt_text = item.get("prompt") or item.get("stem_text") or ""
-    choices = item.get("choices") or item.get("options") or item.get("answer_choices") or {}
+    choices = (
+        item.get("choices") or item.get("options") or item.get("answer_choices") or {}
+    )
     has_figure = bool(item.get("has_figure"))
     skill_tags = item.get("skill_tags") or []
     section = item.get("section") or ""
@@ -784,9 +857,13 @@ def _normalize_question_item(item: dict, *, job_id: int | None) -> dict | None:
         f"Skill tags (raw): {skill_tags}",
         f"Source question number: {source_qnum}",
     ]
-    user_content: List[Dict[str, Any]] = [{"type": "input_text", "text": "\n".join(user_lines)}]
+    user_content: List[Dict[str, Any]] = [
+        {"type": "input_text", "text": "\n".join(user_lines)}
+    ]
     if item.get("page_image_b64") and (has_figure or item.get("choice_figure_keys")):
-        user_content.append({"type": "input_image", "image_url": item.get("page_image_b64")})
+        user_content.append(
+            {"type": "input_image", "image_url": item.get("page_image_b64")}
+        )
 
     payload = {
         "model": current_app.config.get(
@@ -794,7 +871,10 @@ def _normalize_question_item(item: dict, *, job_id: int | None) -> dict | None:
             current_app.config.get("AI_MODEL_NAME", "gpt-5.4"),
         ),
         "input": [
-            {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+            {
+                "role": "system",
+                "content": [{"type": "input_text", "text": system_prompt}],
+            },
             {"role": "user", "content": user_content},
         ],
         "temperature": 0.1,
@@ -820,7 +900,9 @@ def _normalize_question_item(item: dict, *, job_id: int | None) -> dict | None:
     norm_choices = _normalize_choices(data.get("choices"))
     # Keep a dict (possibly empty) so schema validation never sees None.
     data["choices"] = norm_choices or {}
-    data["question_type"] = data.get("question_type") or ("choice" if norm_choices else "fill")
+    data["question_type"] = data.get("question_type") or (
+        "choice" if norm_choices else "fill"
+    )
     data["section"] = _coerce_section(data.get("section"))
     if item.get("coarse_uid"):
         data["coarse_uid"] = item.get("coarse_uid")
@@ -841,7 +923,11 @@ def _normalize_question_item(item: dict, *, job_id: int | None) -> dict | None:
         if not isinstance(meta, dict):
             meta = {}
         meta["difficulty_assessment"] = difficulty_assessment
-        expected_time = difficulty_assessment.get("expected_time_sec") if isinstance(difficulty_assessment, dict) else None
+        expected_time = (
+            difficulty_assessment.get("expected_time_sec")
+            if isinstance(difficulty_assessment, dict)
+            else None
+        )
         if expected_time and not data.get("estimated_time_sec"):
             try:
                 data["estimated_time_sec"] = int(expected_time)
@@ -866,7 +952,9 @@ def _normalize_question_item(item: dict, *, job_id: int | None) -> dict | None:
     data["skill_tags"] = _sanitize_skill_tags(data.get("skill_tags"))
     # Fallback: ensure at least one valid skill tag to pass validation
     if not data["skill_tags"]:
-        data["skill_tags"] = ["M_Algebra"] if data["section"] == "Math" else ["RW_InformationIdeas"]
+        data["skill_tags"] = (
+            ["M_Algebra"] if data["section"] == "Math" else ["RW_InformationIdeas"]
+        )
     data["has_figure"] = bool(data.get("has_figure") or data.get("choice_figure_keys"))
 
     # Normalize metadata container to a dict so later assignments (e.g., page_image_b64) are safe.
@@ -883,11 +971,15 @@ def _normalize_question_item(item: dict, *, job_id: int | None) -> dict | None:
     return data
 
 
-def _solve_choice_answer(normalized: dict, raw_item: dict, *, job_id: int | None) -> dict | None:
+def _solve_choice_answer(
+    normalized: dict, raw_item: dict, *, job_id: int | None
+) -> dict | None:
     choices = normalized.get("choices") or {}
     if not choices:
         return None
-    system_prompt = _build_solver_system_prompt(normalized.get("section") or raw_item.get("section"))
+    system_prompt = _build_solver_system_prompt(
+        normalized.get("section") or raw_item.get("section")
+    )
     passage = normalized.get("passage") or {}
     passage_text = passage.get("content_text") if isinstance(passage, dict) else ""
     stem_text = normalized.get("stem_text") or raw_item.get("prompt") or ""
@@ -898,9 +990,15 @@ def _solve_choice_answer(normalized: dict, raw_item: dict, *, job_id: int | None
         f"Question: {stem_text}",
         f"Choices: {json.dumps(choices, ensure_ascii=False)}",
     ]
-    user_content: List[Dict[str, Any]] = [{"type": "input_text", "text": "\n".join(user_lines)}]
-    if raw_item.get("page_image_b64") and (normalized.get("has_figure") or normalized.get("choice_figure_keys")):
-        user_content.append({"type": "input_image", "image_url": raw_item.get("page_image_b64")})
+    user_content: List[Dict[str, Any]] = [
+        {"type": "input_text", "text": "\n".join(user_lines)}
+    ]
+    if raw_item.get("page_image_b64") and (
+        normalized.get("has_figure") or normalized.get("choice_figure_keys")
+    ):
+        user_content.append(
+            {"type": "input_image", "image_url": raw_item.get("page_image_b64")}
+        )
 
     payload = {
         "model": current_app.config.get(
@@ -911,7 +1009,10 @@ def _solve_choice_answer(normalized: dict, raw_item: dict, *, job_id: int | None
             ),
         ),
         "input": [
-            {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+            {
+                "role": "system",
+                "content": [{"type": "input_text", "text": system_prompt}],
+            },
             {"role": "user", "content": user_content},
         ],
         "temperature": 0.1,
@@ -953,7 +1054,9 @@ def _call_responses_api(
     app = current_app
     api_key = app.config.get("OPENAI_API_KEY")
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY / AI_API_KEY must be configured for PDF ingestion.")
+        raise RuntimeError(
+            "OPENAI_API_KEY / AI_API_KEY must be configured for PDF ingestion."
+        )
     base_url = app.config.get("AI_API_BASE", "https://api.openai.com/v1").rstrip("/")
     timeout = app.config.get("AI_TIMEOUT_SECONDS", 120)
     connect_timeout = app.config.get("AI_CONNECT_TIMEOUT_SEC", 15)
@@ -963,8 +1066,6 @@ def _call_responses_api(
     model_name = payload.get("model")
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     attempt = 0
-    watchdog_timeout = connect_timeout + read_timeout + 5
-    heartbeat_interval = max(5.0, min(15.0, read_timeout / 4))
 
     base_ctx = {
         "job_id": job_id,
@@ -1024,7 +1125,9 @@ def _call_responses_api(
                 raise
             sleep_for = backoff * attempt
             try:
-                retry_after = exc.response.headers.get("Retry-After") if exc.response else None
+                retry_after = (
+                    exc.response.headers.get("Retry-After") if exc.response else None
+                )
                 if retry_after:
                     sleep_for = max(sleep_for, float(retry_after))
             except Exception:
@@ -1051,7 +1154,12 @@ def _call_responses_api(
 
 # ---------------- Helpers ----------------
 def _extract_question_number(payload: Dict[str, Any]) -> str | int | None:
-    for key in ("question_number", "original_question_number", "source_question_number", "question_index"):
+    for key in (
+        "question_number",
+        "original_question_number",
+        "source_question_number",
+        "question_index",
+    ):
         value = payload.get(key)
         if value is None:
             continue
@@ -1061,9 +1169,34 @@ def _extract_question_number(payload: Dict[str, Any]) -> str | int | None:
     return None
 
 
+def _parse_numeric_str(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    try:
+        return float(text)
+    except ValueError:
+        pass
+
+    try:
+        return float(Fraction(text))
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
 def _normalize_choices(raw_choices: Any) -> Dict[str, str]:
     if isinstance(raw_choices, dict):
-        return {str(k).strip().upper(): v if isinstance(v, str) else str(v) for k, v in raw_choices.items() if str(k).strip()}
+        return {
+            str(k).strip().upper(): v if isinstance(v, str) else str(v)
+            for k, v in raw_choices.items()
+            if str(k).strip()
+        }
     if isinstance(raw_choices, list):
         out: Dict[str, str] = {}
         for idx, c in enumerate(raw_choices):
@@ -1095,7 +1228,14 @@ def _coerce_section(raw_value: Any) -> str:
     if not raw_value:
         return "RW"
     lowered = str(raw_value).strip().lower()
-    if lowered in {"rw", "reading", "reading & writing", "reading/writing", "english", "verbal"}:
+    if lowered in {
+        "rw",
+        "reading",
+        "reading & writing",
+        "reading/writing",
+        "english",
+        "verbal",
+    }:
         return "RW"
     if "math" in lowered:
         return "Math"
@@ -1116,13 +1256,19 @@ def _extract_pages(path: Path) -> List[Dict[str, Any]]:
                 try:
                     text = (page.extract_text() or "").strip()
                 except Exception as exc:
-                    app.logger.warning("PDF ingest: extract_text failed on page %s: %s", idx, exc)
+                    app.logger.warning(
+                        "PDF ingest: extract_text failed on page %s: %s", idx, exc
+                    )
                     text = ""
                 image_b64 = _page_to_base64_safe(page, resolution)
                 pages.append({"page_number": idx, "text": text, "image_b64": image_b64})
         return pages
     except Exception as exc:
-        app.logger.warning("PDF ingest: pdfplumber failed on %s (%s). Falling back to text-only.", path, exc)
+        app.logger.warning(
+            "PDF ingest: pdfplumber failed on %s (%s). Falling back to text-only.",
+            path,
+            exc,
+        )
 
     # Fallback: text-only extraction via PyPDF2 (no images)
     try:
@@ -1154,7 +1300,9 @@ def _page_to_base64_safe(page, resolution: int) -> str | None:
         encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
         return f"data:image/png;base64,{encoded}"
     except Exception as exc:
-        current_app.logger.warning("PDF ingest: page render failed, using text-only. %s", exc)
+        current_app.logger.warning(
+            "PDF ingest: page render failed, using text-only. %s", exc
+        )
         return None
 
 
@@ -1207,7 +1355,7 @@ def _request_page_questions(
     system_prompt = (
         "You are an SAT content extraction assistant. Your ONLY task is to emit JSON "
         "that matches the provided schema exactly. Each question entry must include:\n"
-        "- `passage`: ONLY the supporting narrative text that precedes the question (no questions and no tables/charts). If details appear only inside a table/figure, DO NOT copy the numbers/text; simply leave the passage empty or refer to the figure in words (e.g., \"Refer to the pyramid table\").\n"
+        '- `passage`: ONLY the supporting narrative text that precedes the question (no questions and no tables/charts). If details appear only inside a table/figure, DO NOT copy the numbers/text; simply leave the passage empty or refer to the figure in words (e.g., "Refer to the pyramid table").\n'
         "- `prompt`: ONLY the interrogative sentence(s) that ask what the student must do (e.g., the 'Which choice...' line).\n"
         "- `choices`: every answer choice with explicit labels (A/B/C/...).\n"
         "- `has_figure`: true if the question references a chart, table, graph, map, image or any visual data (including ASCII tables). When true, DO NOT copy the figure contents into `passage` or `prompt`; the platform will display the cropped figure separately.\n"
@@ -1215,7 +1363,7 @@ def _request_page_questions(
         f"{SKILL_TAG_PROMPT}. If none apply, use an empty array.\n"
         "- If SAT passage text is underlined, preserve those exact spans inline in `passage` using <underline>...</underline>. "
         "Use <highlight>...</highlight> only for truly highlighted text.\n"
-        "If a page has zero questions, respond with {\"questions\": []}. Never include commentary, markdown, explanations, or figure text."
+        'If a page has zero questions, respond with {"questions": []}. Never include commentary, markdown, explanations, or figure text.'
     )
     user_prompt = (
         f"You are examining page {page_index} of an SAT prep PDF. Identify each complete question, "
@@ -1235,7 +1383,10 @@ def _request_page_questions(
             current_app.config.get("AI_MODEL_NAME", "gpt-5.4"),
         ),
         "input": [
-            {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+            {
+                "role": "system",
+                "content": [{"type": "input_text", "text": system_prompt}],
+            },
             {"role": "user", "content": user_content},
         ],
         "temperature": 0.1,
@@ -1250,7 +1401,9 @@ def _request_page_questions(
     try:
         data = json.loads(raw_text)
     except json.JSONDecodeError:
-        current_app.logger.warning("PDF ingest: invalid JSON on page %s: %s", page_index, raw_text[:200])
+        current_app.logger.warning(
+            "PDF ingest: invalid JSON on page %s: %s", page_index, raw_text[:200]
+        )
         return []
     questions = data.get("questions", [])
     if isinstance(questions, list):
@@ -1272,7 +1425,9 @@ def _normalize_question(
     *,
     page_image_b64: str | None = None,
     attempt_hook: Optional[
-        Callable[[Literal["start", "retry"], int, int, float, Optional[Exception]], None]
+        Callable[
+            [Literal["start", "retry"], int, int, float, Optional[Exception]], None
+        ]
     ] = None,
     job_id: int | None = None,
 ) -> dict:
@@ -1285,7 +1440,12 @@ def _normalize_question(
             current_app.config.get("AI_MODEL_NAME", "gpt-5.4"),
         ),
         "input": [
-            {"role": "system", "content": [{"type": "input_text", "text": f"{system_prompt} {schema_hint}"}]},
+            {
+                "role": "system",
+                "content": [
+                    {"type": "input_text", "text": f"{system_prompt} {schema_hint}"}
+                ],
+            },
             {
                 "role": "user",
                 "content": [
@@ -1300,7 +1460,9 @@ def _normalize_question(
         "temperature": 0.1,
     }
     if page_image_b64:
-        payload["input"][1]["content"].append({"type": "input_image", "image_url": page_image_b64})
+        payload["input"][1]["content"].append(
+            {"type": "input_image", "image_url": page_image_b64}
+        )
     raw_text = _call_responses_api(
         payload,
         purpose="question_normalization",
@@ -1331,7 +1493,9 @@ def _normalize_question(
             if len(k) == 1 and k.isalpha():
                 normalized_choice_keys.append(k)
     data["choice_figure_keys"] = normalized_choice_keys
-    data["has_figure"] = bool(question_payload.get("has_figure") or normalized_choice_keys)
+    data["has_figure"] = bool(
+        question_payload.get("has_figure") or normalized_choice_keys
+    )
     if question_payload.get("page"):
         page_value = question_payload.get("page")
         data.setdefault("page", str(page_value))
@@ -1365,7 +1529,9 @@ def _normalize_question(
             acc = answer_schema.get("acceptable") or []
             if not acc:
                 answer_schema["acceptable"] = [str(correct_val).strip()]
-        answer_schema.setdefault("type", "numeric" if _parse_numeric_str(correct_val) is not None else "text")
+        answer_schema.setdefault(
+            "type", "numeric" if _parse_numeric_str(correct_val) is not None else "text"
+        )
         answer_schema.setdefault("allow_fraction", True)
         answer_schema.setdefault("allow_pi", True)
         answer_schema.setdefault("strip_spaces", True)
@@ -1405,7 +1571,9 @@ def _normalize_question(
             normalized["estimated_time_sec"] = int(expected_time)
     solver_result = None
     correct_answer = normalized.get("correct_answer") or {}
-    correct_value = correct_answer.get("value") if isinstance(correct_answer, dict) else None
+    correct_value = (
+        correct_answer.get("value") if isinstance(correct_answer, dict) else None
+    )
     if not correct_value:
         solver_result = _solve_question_with_ai(
             normalized,
@@ -1496,11 +1664,17 @@ def _solve_question_with_ai(
         "AI_PDF_NORMALIZE_MODEL",
         app.config.get("AI_MODEL_NAME", "gpt-5.4"),
     )
-    system_prompt = _build_solver_system_prompt(normalized_question.get("section") or question_payload.get("section"))
+    system_prompt = _build_solver_system_prompt(
+        normalized_question.get("section") or question_payload.get("section")
+    )
     passage = normalized_question.get("passage", {}) or {}
     passage_text = passage.get("content_text") if isinstance(passage, dict) else ""
-    stem_text = normalized_question.get("stem_text") or question_payload.get("prompt") or ""
-    section = normalized_question.get("section") or question_payload.get("section") or ""
+    stem_text = (
+        normalized_question.get("stem_text") or question_payload.get("prompt") or ""
+    )
+    section = (
+        normalized_question.get("section") or question_payload.get("section") or ""
+    )
     user_lines = [
         f"Section: {section}",
         f"Passage: {passage_text or '(no passage)'}",
@@ -1510,13 +1684,17 @@ def _solve_question_with_ai(
     user_prompt = "\n".join(user_lines)
     user_content: List[Dict[str, Any]] = [{"type": "input_text", "text": user_prompt}]
     if page_image_b64 and (
-        normalized_question.get("has_figure") or normalized_question.get("choice_figure_keys")
+        normalized_question.get("has_figure")
+        or normalized_question.get("choice_figure_keys")
     ):
         user_content.append({"type": "input_image", "image_url": page_image_b64})
     payload = {
         "model": model_name,
         "input": [
-            {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+            {
+                "role": "system",
+                "content": [{"type": "input_text", "text": system_prompt}],
+            },
             {"role": "user", "content": user_content},
         ],
         "temperature": 0.1,
@@ -1554,7 +1732,14 @@ def _coerce_section(raw_value: Any) -> str:
     if not raw_value:
         return "RW"
     lowered = str(raw_value).strip().lower()
-    if lowered in {"rw", "reading", "reading & writing", "reading/writing", "english", "verbal"}:
+    if lowered in {
+        "rw",
+        "reading",
+        "reading & writing",
+        "reading/writing",
+        "english",
+        "verbal",
+    }:
         return "RW"
     if lowered in {"math", "mathematics", "quant", "quantitative"}:
         return "Math"
@@ -1577,7 +1762,13 @@ def _normalize_passage(raw_value: Any) -> dict | None:
 
 
 AttemptHook = Callable[
-    [Literal["start", "retry", "success", "heartbeat"], int, int, float, Optional[Exception]],
+    [
+        Literal["start", "retry", "success", "heartbeat"],
+        int,
+        int,
+        float,
+        Optional[Exception],
+    ],
     None,
 ]
 
@@ -1597,5 +1788,3 @@ def _call_responses_api_legacy(
         job_id=job_id,
         ctx=ctx,
     )
-
-

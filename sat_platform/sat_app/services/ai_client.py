@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 import time
+from dataclasses import dataclass
 
 import requests
 from flask import current_app
@@ -75,4 +75,3 @@ def get_ai_client() -> AIClient:
         )
         app.extensions["ai_client"] = client
     return client
-

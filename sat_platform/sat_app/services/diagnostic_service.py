@@ -5,12 +5,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Dict, List, Tuple
 
-from werkzeug.exceptions import BadRequest
 from sqlalchemy import func
+from werkzeug.exceptions import BadRequest
 
 from ..extensions import db
 from ..models import DiagnosticAttempt, Question, StudySession
-from .skill_taxonomy import iter_skill_tags, describe_skill, infer_section_from_tag
+from .skill_taxonomy import describe_skill, infer_section_from_tag, iter_skill_tags
 
 QUESTIONS_PER_SKILL = 2
 SKILL_SEQUENCE = list(iter_skill_tags())
@@ -48,7 +48,9 @@ def start_attempt(user_id: int) -> Tuple[DiagnosticAttempt, StudySession]:
     if attempt and attempt.status in COMPLETED_STATES:
         raise BadRequest("diagnostic_already_completed")
     if attempt is None or attempt.status != "pending":
-        attempt = DiagnosticAttempt(user_id=user_id, status="pending", total_questions=TOTAL_TARGET)
+        attempt = DiagnosticAttempt(
+            user_id=user_id, status="pending", total_questions=TOTAL_TARGET
+        )
         db.session.add(attempt)
         db.session.commit()
 
@@ -109,7 +111,9 @@ def handle_session_end(session: StudySession) -> None:
     stats = _summarize_progress(attempt, session)
     attempt.status = "completed"
     attempt.completed_at = _now()
-    attempt.total_questions = stats.get("total_questions", attempt.total_questions or TOTAL_TARGET)
+    attempt.total_questions = stats.get(
+        "total_questions", attempt.total_questions or TOTAL_TARGET
+    )
     attempt.result_summary = stats
     db.session.commit()
 
@@ -132,7 +136,9 @@ def _latest_attempt(user_id: int) -> DiagnosticAttempt | None:
     )
 
 
-def _active_session_from_attempt(attempt: DiagnosticAttempt | None) -> StudySession | None:
+def _active_session_from_attempt(
+    attempt: DiagnosticAttempt | None,
+) -> StudySession | None:
     if not attempt or not attempt.session:
         return None
     session = attempt.session
@@ -152,7 +158,9 @@ def _build_question_bundle(user_id: int) -> Tuple[List[Question], List[dict]]:
     questions: List[Question] = []
     overrides: List[dict] = []
     for skill_tag in SKILL_SEQUENCE:
-        batch, extra_overrides = _fetch_for_skill(skill_tag, QUESTIONS_PER_SKILL, used_ids)
+        batch, extra_overrides = _fetch_for_skill(
+            skill_tag, QUESTIONS_PER_SKILL, used_ids
+        )
         questions.extend(batch)
         overrides.extend(extra_overrides)
     if len(questions) < TOTAL_TARGET:
@@ -163,14 +171,18 @@ def _build_question_bundle(user_id: int) -> Tuple[List[Question], List[dict]]:
         fallback_questions = fallback_query.order_by(func.random()).limit(deficit).all()
         for idx, question in enumerate(fallback_questions):
             questions.append(question)
-            overrides.append({"diagnostic_skill": SKILL_SEQUENCE[idx % len(SKILL_SEQUENCE)]})
+            overrides.append(
+                {"diagnostic_skill": SKILL_SEQUENCE[idx % len(SKILL_SEQUENCE)]}
+            )
             used_ids.add(question.id)
         if len(questions) < TOTAL_TARGET:
             deficit = TOTAL_TARGET - len(questions)
             repeat_pool = Question.query.order_by(func.random()).limit(deficit).all()
             for idx, question in enumerate(repeat_pool):
                 questions.append(question)
-                overrides.append({"diagnostic_skill": SKILL_SEQUENCE[idx % len(SKILL_SEQUENCE)]})
+                overrides.append(
+                    {"diagnostic_skill": SKILL_SEQUENCE[idx % len(SKILL_SEQUENCE)]}
+                )
     if not questions:
         raise BadRequest("diagnostic_questions_unavailable")
     return questions, overrides
@@ -209,9 +221,7 @@ def _fetch_for_skill(skill_tag: str, target_count: int, used_ids: set[int]):
             if remaining <= 0:
                 break
     if remaining > 0:
-        random_fallback = (
-            Question.query.order_by(func.random()).limit(remaining).all()
-        )
+        random_fallback = Question.query.order_by(func.random()).limit(remaining).all()
         for question in random_fallback:
             batch.append(question)
             overrides.append({"diagnostic_skill": skill_tag})
@@ -224,11 +234,15 @@ def _summarize_progress(
     skills: Dict[str, Dict[str, float]] = {
         tag: {"completed": 0, "total": 0} for tag in SKILL_SEQUENCE
     }
-    total_questions = attempt.total_questions if attempt and attempt.total_questions else TOTAL_TARGET
+    total_questions = (
+        attempt.total_questions if attempt and attempt.total_questions else TOTAL_TARGET
+    )
     completed_questions = 0
     if session:
         assigned = session.questions_assigned or []
-        done = {entry.get("question_id"): entry for entry in (session.questions_done or [])}
+        done = {
+            entry.get("question_id"): entry for entry in (session.questions_done or [])
+        }
         for entry in assigned:
             tag = entry.get("diagnostic_skill") or _infer_fallback_tag(entry)
             if tag not in skills:
@@ -263,7 +277,9 @@ def _summarize_progress(
     }
 
 
-def _serialize_attempt(attempt: DiagnosticAttempt | None, progress: dict) -> dict | None:
+def _serialize_attempt(
+    attempt: DiagnosticAttempt | None, progress: dict
+) -> dict | None:
     if not attempt:
         return None
     return {
@@ -271,7 +287,9 @@ def _serialize_attempt(attempt: DiagnosticAttempt | None, progress: dict) -> dic
         "status": attempt.status,
         "total_questions": attempt.total_questions,
         "started_at": attempt.started_at.isoformat() if attempt.started_at else None,
-        "completed_at": attempt.completed_at.isoformat() if attempt.completed_at else None,
+        "completed_at": (
+            attempt.completed_at.isoformat() if attempt.completed_at else None
+        ),
         "result_summary": attempt.result_summary,
         "progress_snapshot": progress,
     }
@@ -283,4 +301,3 @@ def _infer_fallback_tag(entry: dict) -> str:
         if tag in SKILL_SEQUENCE:
             return tag
     return SKILL_SEQUENCE[0]
-

@@ -5,9 +5,9 @@ Revises: 33b9f2f6fe1c
 Create Date: 2025-12-07 14:00:00.000000
 
 """
-from alembic import op
-import sqlalchemy as sa
 
+import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "8fe3d8d3f5aa"
@@ -28,9 +28,9 @@ def upgrade():
         ("password_reset_requested_at", sa.DateTime(timezone=True)),
         ("password_reset_expires_at", sa.DateTime(timezone=True)),
     ]
-    for name, column in new_columns:
+    for name, column_type in new_columns:
         if name not in columns:
-            op.add_column("users", sa.Column(name, column.type, nullable=True))
+            op.add_column("users", sa.Column(name, column_type, nullable=True))
 
 
 def downgrade():
@@ -45,5 +45,5 @@ def downgrade():
     ]:
         columns = {col["name"] for col in inspector.get_columns("users")}
         if name in columns:
-            op.drop_column("users", name)
-
+            with op.batch_alter_table("users") as batch_op:
+                batch_op.drop_column(name)

@@ -5,11 +5,12 @@ from __future__ import annotations
 import random
 import string
 from datetime import datetime, timedelta, timezone
+
 from flask import current_app, render_template
 from werkzeug.exceptions import BadRequest
 
 from ..extensions import db
-from ..models import User, EmailVerificationTicket
+from ..models import EmailVerificationTicket, User
 from . import mail_service
 
 CODE_LENGTH = 6
@@ -190,7 +191,7 @@ def request_signup_code(email: str, language: str = "en") -> None:
     ticket.attempts = 0
     ticket.last_sent_at = now
     ticket.resend_count = (ticket.resend_count or 0) + 1
-    ticket.language = (language or ticket.language or "en")
+    ticket.language = language or ticket.language or "en"
     ticket.user_id = None
     db.session.add(ticket)
     db.session.commit()
@@ -231,7 +232,9 @@ def request_email_change_code(user: User, new_email: str) -> None:
     ticket = EmailVerificationTicket.query.filter_by(email=normalized).first()
     now = _now()
     if ticket:
-        if ticket.purpose != PURPOSE_EMAIL_CHANGE or (ticket.user_id and ticket.user_id != user.id):
+        if ticket.purpose != PURPOSE_EMAIL_CHANGE or (
+            ticket.user_id and ticket.user_id != user.id
+        ):
             raise BadRequest("verification_pending_other")
         last_sent = _coerce_aware(ticket.last_sent_at)
         if last_sent and (now - last_sent).total_seconds() < RESEND_INTERVAL_SECONDS:
@@ -337,8 +340,12 @@ def _notify_email_change(old_email: str, new_email: str, language: str) -> None:
         "year": _now().year,
     }
     subject = _subject_by_language(language, TEMPLATE_EMAIL_CHANGE_NOTICE)
-    html_body = render_template(f"emails/{TEMPLATE_EMAIL_CHANGE_NOTICE}_{language}.html", **context)
-    text_body = render_template(f"emails/{TEMPLATE_EMAIL_CHANGE_NOTICE}_{language}.txt", **context)
+    html_body = render_template(
+        f"emails/{TEMPLATE_EMAIL_CHANGE_NOTICE}_{language}.html", **context
+    )
+    text_body = render_template(
+        f"emails/{TEMPLATE_EMAIL_CHANGE_NOTICE}_{language}.txt", **context
+    )
     try:
         mail_service.send_email(
             to=old_email,
@@ -349,4 +356,3 @@ def _notify_email_change(old_email: str, new_email: str, language: str) -> None:
         )
     except Exception:  # pragma: no cover - best-effort notification
         current_app.logger.warning("Failed to send email change notice", exc_info=True)
-

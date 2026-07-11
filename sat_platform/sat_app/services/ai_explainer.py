@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-import json
-from typing import Any, Dict, List
-from pathlib import Path
 import base64
+import json
 import time
+from pathlib import Path
+from typing import Any, Dict, List
 
 import requests
 from flask import current_app
 
 from .ai_client import get_ai_client
-
 
 ANIMATION_PROTOCOL = "tutor.anim.v1"
 
@@ -26,7 +25,7 @@ MATH_DOMAIN_MAP = (
 MATH_ROUTE_RULES = (
     "Route selection: A) Graph/Desmos for intersections/roots/inequality shading/vertex/solution sets/regression or long algebra. "
     "B) Plug in options or special values (start B/C; try 0,1,-1,2,10,100) when options are numeric/expressions or ask which holds. "
-    "C) Formal algebra when exact value/parameter range/identity/simplified form is required or \"exact/in terms of π\" is stated."
+    'C) Formal algebra when exact value/parameter range/identity/simplified form is required or "exact/in terms of π" is stated.'
 )
 MATH_MC_RULES = (
     "MC safety: estimate magnitude/sign to drop absurd options; typically 1–2 obvious eliminations. "
@@ -76,11 +75,19 @@ def _collect_question_figures(question) -> List[Dict[str, Any]]:
         except Exception:  # pragma: no cover - defensive
             figure_items = []
     for item in figure_items:
-        pre_resolved = getattr(item, "image_url", None) or (item.get("image_url") if isinstance(item, dict) else None)
-        description = getattr(item, "description", None) or (item.get("description") if isinstance(item, dict) else None)
-        figure_id = getattr(item, "id", None) or (item.get("id") if isinstance(item, dict) else None)
+        pre_resolved = getattr(item, "image_url", None) or (
+            item.get("image_url") if isinstance(item, dict) else None
+        )
+        description = getattr(item, "description", None) or (
+            item.get("description") if isinstance(item, dict) else None
+        )
+        figure_id = getattr(item, "id", None) or (
+            item.get("id") if isinstance(item, dict) else None
+        )
         if pre_resolved:
-            figures.append({"id": figure_id, "description": description, "image_url": pre_resolved})
+            figures.append(
+                {"id": figure_id, "description": description, "image_url": pre_resolved}
+            )
             continue
         image_path = getattr(item, "image_path", None)
         if not image_path:
@@ -98,7 +105,9 @@ def _collect_question_figures(question) -> List[Dict[str, Any]]:
     return figures
 
 
-def _build_messages(question, user_answer, user_language: str, depth: str, figures: List[Dict[str, Any]]) -> dict:
+def _build_messages(
+    question, user_answer, user_language: str, depth: str, figures: List[Dict[str, Any]]
+) -> dict:
     language_tag = _resolve_language_tag(user_language)
     language_name = "Chinese" if language_tag == "zh" else "English"
     schema_description = json.dumps(
@@ -139,7 +148,7 @@ def _build_messages(question, user_answer, user_language: str, depth: str, figur
         f"- MCQ tactics: {MATH_MC_RULES}\n"
         f"- SPR rules: {MATH_SPR_RULES}\n"
         "- Explanation SOP (S1-S6): restate goal/givens → classify type/domain → choose strategy (graph vs plug-in vs algebra) with reason → build structure then compute → quick self-check (substitute back / unit & domain / sign & magnitude) → takeaway for similar problems.\n"
-        "- Animations: highlight equations, substitutions, graph features, numeric checks; when using figures, set target \"figure\" with figure_id. Include at least one check (substitute back, domain/unit, or reasonableness)."
+        '- Animations: highlight equations, substitutions, graph features, numeric checks; when using figures, set target "figure" with figure_id. Include at least one check (substitute back, domain/unit, or reasonableness).'
     )
     rw_prompt_block = (
         "- Reading & Writing heuristics: use textual evidence, avoid extreme wording, correct choices restate the text, no gut guesses.\n"
@@ -164,34 +173,36 @@ def _build_messages(question, user_answer, user_language: str, depth: str, figur
         "- summary should be <= 80 words.\n"
         "- All narration, titles, and summary must be written only in the requested target language.\n"
         "- Ensure answer_correct reflects whether the submitted answer matches the official key.\n"
-        "- When you populate an animation with `target: \"passage\"` or `target: \"stem\"`, copy exact contiguous characters from the provided text; no paraphrasing or invented wording.\n"
-        "- For every animation that references answer choices: set target to \"choices\", always include `choice_id` (A, B, C, ...), and keep the `text` field identical to that choice’s actual wording. Provide one animation object per affected choice.\n"
+        '- When you populate an animation with `target: "passage"` or `target: "stem"`, copy exact contiguous characters from the provided text; no paraphrasing or invented wording.\n'
+        '- For every animation that references answer choices: set target to "choices", always include `choice_id` (A, B, C, ...), and keep the `text` field identical to that choice’s actual wording. Provide one animation object per affected choice.\n'
         "- When highlighting text, quote enough surrounding words so the snippet is unique. Avoid vague markers such as “this sentence”.\n"
-        "- If figures are provided, interpret them directly. When an animation focuses on a figure, set target to \"figure\", provide a short `text` describing the region, set `figure_id`, and explain how that visual supports or eliminates a choice."
+        '- If figures are provided, interpret them directly. When an animation focuses on a figure, set target to "figure", provide a short `text` describing the region, set `figure_id`, and explain how that visual supports or eliminates a choice.'
     )
     is_math = str(getattr(question, "section", "")).lower().startswith("math")
     system_prompt += "\n" + (math_prompt_block if is_math else rw_prompt_block)
     if language_tag == "zh":
-        system_prompt += (
-            "- For Chinese preference: use Chinese as the main language but include essential English keywords or quoted phrases in parentheses so students connect back to the SAT passage. Keep the bilingual mix concise (Chinese sentence + key English term) rather than writing two separate explanations.\n"
-        )
+        system_prompt += "- For Chinese preference: use Chinese as the main language but include essential English keywords or quoted phrases in parentheses so students connect back to the SAT passage. Keep the bilingual mix concise (Chinese sentence + key English term) rather than writing two separate explanations.\n"
     figures_prompt = ""
     if figures:
         figures_prompt = f"\nFigures metadata: {json.dumps([{'id': f['id'], 'description': f.get('description')} for f in figures], ensure_ascii=False)}"
         figures_prompt += (
             "\nUse these images when reasoning about the question. Reference them in animations via "
-            "`target: \"figure\"` and provide the matching `figure_id` so the UI knows which chart to highlight."
+            '`target: "figure"` and provide the matching `figure_id` so the UI knows which chart to highlight.'
         )
     question_type = getattr(question, "question_type", "choice") or "choice"
     answer_schema = getattr(question, "answer_schema", None)
     passage_text = None
-    if getattr(question, "passage", None) and getattr(question.passage, "content_text", None):
+    if getattr(question, "passage", None) and getattr(
+        question.passage, "content_text", None
+    ):
         passage_text = question.passage.content_text
     else:
         metadata = getattr(question, "metadata_json", None) or {}
         passage_text = metadata.get("passage_text") or metadata.get("passage_excerpt")
     if passage_text:
-        passage_prompt = f"Passage text (copy exact wording for highlights):\n{passage_text}\n"
+        passage_prompt = (
+            f"Passage text (copy exact wording for highlights):\n{passage_text}\n"
+        )
     else:
         passage_prompt = "Passage text: [No passage available for this item]\n"
     user_prompt = (
@@ -241,7 +252,14 @@ def _build_messages(question, user_answer, user_language: str, depth: str, figur
 
 
 def _validate_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    required_fields = {"protocol_version", "question_id", "answer_correct", "language", "summary", "steps"}
+    required_fields = {
+        "protocol_version",
+        "question_id",
+        "answer_correct",
+        "language",
+        "summary",
+        "steps",
+    }
     if not required_fields.issubset(payload):
         missing = required_fields - set(payload)
         raise ValueError(f"Missing keys in AI response: {missing}")
@@ -326,16 +344,21 @@ def generate_explanation(
         page_first.append(fig)
     collected_figures = page_first
 
-    prompt = _build_messages(question, user_answer, user_language, depth, collected_figures)
+    prompt = _build_messages(
+        question, user_answer, user_language, depth, collected_figures
+    )
 
     payload = {
         "model": app.config.get("AI_EXPLAINER_MODEL", get_ai_client().default_model),
         "input": [
-            {"role": "system", "content": [{"type": "input_text", "text": prompt["system_prompt"]}]},
+            {
+                "role": "system",
+                "content": [{"type": "input_text", "text": prompt["system_prompt"]}],
+            },
             {"role": "user", "content": prompt["user_content"]},
         ],
         # Structured outputs per Responses API: use text.format, not response_format.
-        "text": {"format": {"type":"json_object"}},  # ✅ format 是 object
+        "text": {"format": {"type": "json_object"}},  # ✅ format 是 object
         "temperature": 0.2,
     }
 
@@ -366,7 +389,9 @@ def generate_explanation(
             if response.status_code >= 400:
                 # Log response body to aid debugging of 400s
                 app.logger.warning(
-                    "AI explainer HTTP error %s: %s", response.status_code, response.text[:500]
+                    "AI explainer HTTP error %s: %s",
+                    response.status_code,
+                    response.text[:500],
                 )
                 response.raise_for_status()
             raw = response.json()
@@ -374,11 +399,17 @@ def generate_explanation(
             if isinstance(raw, dict):
                 output = raw.get("output")
                 if isinstance(output, list) and output:
-                    content = output[0].get("content") if isinstance(output[0], dict) else None
+                    content = (
+                        output[0].get("content")
+                        if isinstance(output[0], dict)
+                        else None
+                    )
                     if isinstance(content, list) and content:
                         text_obj = content[0]
                         if isinstance(text_obj, dict):
-                            output_text = text_obj.get("text") or text_obj.get("output_text")
+                            output_text = text_obj.get("text") or text_obj.get(
+                                "output_text"
+                            )
                 # legacy chat fallback
                 if not output_text and raw.get("choices"):
                     output_text = raw["choices"][0]["message"]["content"]
@@ -400,4 +431,3 @@ def generate_explanation(
             time.sleep(delay)
         except json.JSONDecodeError as exc:
             raise AiExplainerError("Invalid JSON from explainer") from exc
-

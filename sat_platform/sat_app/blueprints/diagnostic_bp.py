@@ -33,7 +33,10 @@ def diagnostic_start():
     try:
         diagnostic_service.start_attempt(current_user.id)
     except BadRequest as exc:
-        return jsonify({"error": exc.description or "diagnostic_error"}), HTTPStatus.BAD_REQUEST
+        return (
+            jsonify({"error": exc.description or "diagnostic_error"}),
+            HTTPStatus.BAD_REQUEST,
+        )
     return jsonify(_status_payload()), HTTPStatus.CREATED
 
 
@@ -42,4 +45,3 @@ def diagnostic_start():
 def diagnostic_skip():
     diagnostic_service.skip_attempt(current_user.id)
     return jsonify(_status_payload())
-

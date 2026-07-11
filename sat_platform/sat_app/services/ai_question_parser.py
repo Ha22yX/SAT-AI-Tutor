@@ -17,7 +17,11 @@ def _fallback_payload(block: dict) -> dict:
     content = block.get("content") or ""
     lines = content.split("\n")
     stem = lines[0] if lines else "Untitled question"
-    choices = {chr(65 + idx): text.strip() for idx, text in enumerate(lines[1:5]) if text.strip()}
+    choices = {
+        chr(65 + idx): text.strip()
+        for idx, text in enumerate(lines[1:5])
+        if text.strip()
+    }
     if not choices:
         choices = {"A": "Option A", "B": "Option B", "C": "Option C", "D": "Option D"}
     return {
@@ -65,4 +69,3 @@ def parse_raw_question_block(block: dict) -> Dict[str, Any]:
         current_app.logger.warning("AI parser fallback due to error: %s", exc)
         data = _fallback_payload(block)
     return data
-

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from sat_app import create_app
 
 
@@ -36,4 +35,3 @@ def test_ping_endpoints(app, endpoint):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["status"] == "ok"
-

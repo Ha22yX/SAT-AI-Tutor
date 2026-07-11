@@ -1,21 +1,16 @@
-" ""Membership related endpoints for subscription intent requests.""" 
+" " "Membership related endpoints for subscription intent requests." ""
 
 from __future__ import annotations
 
 from http import HTTPStatus
 
-from flask import Blueprint, jsonify, request, current_app
-from flask_jwt_extended import jwt_required, current_user
+from flask import Blueprint, current_app, jsonify, request
+from flask_jwt_extended import current_user, jwt_required
 from marshmallow import ValidationError
 
 from ..extensions import db
 from ..models import MembershipOrder
-from ..schemas import (
-    MembershipOrderSchema,
-    MembershipOrderCreateSchema,
-)
-from ..services import membership_service
-
+from ..schemas import MembershipOrderCreateSchema, MembershipOrderSchema
 
 membership_bp = Blueprint("membership_bp", __name__)
 
@@ -27,11 +22,15 @@ create_schema = MembershipOrderCreateSchema()
 def _plan_definition(plan: str) -> dict:
     plans = {
         "monthly": {
-            "price_cents": current_app.config.get("MEMBERSHIP_MONTHLY_PRICE_CENTS", 3900),
+            "price_cents": current_app.config.get(
+                "MEMBERSHIP_MONTHLY_PRICE_CENTS", 3900
+            ),
             "days": current_app.config.get("MEMBERSHIP_MONTHLY_DAYS", 30),
         },
         "quarterly": {
-            "price_cents": current_app.config.get("MEMBERSHIP_QUARTERLY_PRICE_CENTS", 9900),
+            "price_cents": current_app.config.get(
+                "MEMBERSHIP_QUARTERLY_PRICE_CENTS", 9900
+            ),
             "days": current_app.config.get("MEMBERSHIP_QUARTERLY_DAYS", 90),
         },
     }
@@ -72,4 +71,3 @@ def list_orders():
         .all()
     )
     return jsonify({"orders": orders_schema.dump(orders)})
-

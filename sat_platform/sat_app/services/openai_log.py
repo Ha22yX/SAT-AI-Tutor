@@ -27,7 +27,9 @@ def _append_to_file(entry: Dict[str, Any]) -> None:
     try:
         base_dir.mkdir(parents=True, exist_ok=True)
         path = base_dir / f"job-{job_id}.log"
-        path.write_text(path.read_text() + f"{entry}\n" if path.exists() else f"{entry}\n")
+        path.write_text(
+            path.read_text() + f"{entry}\n" if path.exists() else f"{entry}\n"
+        )
     except Exception:
         # Persistence should not break pipeline; ignore file errors.
         pass
@@ -54,4 +56,3 @@ def get_logs(limit: int = 100) -> List[Dict[str, Any]]:
     """Return a copy of the most recent log entries (in-memory)."""
     limit = max(1, min(limit, LOG_MAX_ENTRIES))
     return list(_buffer)[:limit]
-

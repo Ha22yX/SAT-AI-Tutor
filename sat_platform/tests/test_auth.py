@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
-import pytest
-
-from sat_app.models import User, EmailVerificationTicket
 from sat_app.extensions import db
+from sat_app.models import EmailVerificationTicket, User
 from sat_app.utils.security import hash_password
+
 
 def test_register_creates_user_and_profile(client):
     payload = {
@@ -84,11 +81,16 @@ def test_login_fails_when_email_not_verified(client):
 
 
 def test_me_requires_jwt_and_returns_user(client):
-    payload = {"email": "me@example.com", "password": "StrongPass123!", "code": _request_registration_code(client, "me@example.com")}
+    payload = {
+        "email": "me@example.com",
+        "password": "StrongPass123!",
+        "code": _request_registration_code(client, "me@example.com"),
+    }
     register = client.post("/api/auth/register", json=payload)
     token = register.get_json()["access_token"]
     resp = client.get(
-        "/api/auth/me", headers={"Authorization": f"Bearer {token}"},
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
     assert resp.get_json()["user"]["email"] == "me@example.com"
@@ -150,7 +152,11 @@ def test_non_root_admin_cannot_create_admin(client):
 
 
 def test_update_profile_changes_language(client):
-    payload = {"email": "update@example.com", "password": "StrongPass123!", "code": _request_registration_code(client, "update@example.com")}
+    payload = {
+        "email": "update@example.com",
+        "password": "StrongPass123!",
+        "code": _request_registration_code(client, "update@example.com"),
+    }
     register = client.post("/api/auth/register", json=payload)
     token = register.get_json()["access_token"]
     resp = client.patch(
@@ -165,7 +171,11 @@ def test_update_profile_changes_language(client):
 
 
 def test_update_profile_allows_plan_questions(client):
-    payload = {"email": "planpref@example.com", "password": "StrongPass123!", "code": _request_registration_code(client, "planpref@example.com")}
+    payload = {
+        "email": "planpref@example.com",
+        "password": "StrongPass123!",
+        "code": _request_registration_code(client, "planpref@example.com"),
+    }
     register = client.post("/api/auth/register", json=payload)
     token = register.get_json()["access_token"]
     resp = client.patch(
@@ -181,7 +191,11 @@ def test_update_profile_allows_plan_questions(client):
 
 
 def test_change_password_requires_current_password(client):
-    payload = {"email": "changepw@example.com", "password": "StrongPass123!", "code": _request_registration_code(client, "changepw@example.com")}
+    payload = {
+        "email": "changepw@example.com",
+        "password": "StrongPass123!",
+        "code": _request_registration_code(client, "changepw@example.com"),
+    }
     register = client.post("/api/auth/register", json=payload)
     token = register.get_json()["access_token"]
     bad = client.post(
@@ -193,7 +207,10 @@ def test_change_password_requires_current_password(client):
 
     good = client.post(
         "/api/auth/password",
-        json={"current_password": "StrongPass123!", "new_password": "NewStrongPass123!"},
+        json={
+            "current_password": "StrongPass123!",
+            "new_password": "NewStrongPass123!",
+        },
         headers={"Authorization": f"Bearer {token}"},
     )
     assert good.status_code == 200
@@ -221,7 +238,11 @@ def test_request_code_enforces_cooldown(client):
 
 
 def test_email_change_flow_updates_user_email(client):
-    payload = {"email": "change@example.com", "password": "StrongPass123!", "code": _request_registration_code(client, "change@example.com")}
+    payload = {
+        "email": "change@example.com",
+        "password": "StrongPass123!",
+        "code": _request_registration_code(client, "change@example.com"),
+    }
     register = client.post("/api/auth/register", json=payload)
     token = register.get_json()["access_token"]
 
@@ -251,9 +272,17 @@ def test_email_change_flow_updates_user_email(client):
 
 
 def test_email_change_request_rejects_existing_email(client):
-    first = {"email": "taken@example.com", "password": "StrongPass123!", "code": _request_registration_code(client, "taken@example.com")}
+    first = {
+        "email": "taken@example.com",
+        "password": "StrongPass123!",
+        "code": _request_registration_code(client, "taken@example.com"),
+    }
     client.post("/api/auth/register", json=first)
-    second = {"email": "second@example.com", "password": "StrongPass123!", "code": _request_registration_code(client, "second@example.com")}
+    second = {
+        "email": "second@example.com",
+        "password": "StrongPass123!",
+        "code": _request_registration_code(client, "second@example.com"),
+    }
     register = client.post("/api/auth/register", json=second)
     token = register.get_json()["access_token"]
     resp = client.post(
@@ -266,7 +295,11 @@ def test_email_change_request_rejects_existing_email(client):
 
 
 def test_email_change_confirm_rejects_wrong_code(client):
-    payload = {"email": "wrongcode@example.com", "password": "StrongPass123!", "code": _request_registration_code(client, "wrongcode@example.com")}
+    payload = {
+        "email": "wrongcode@example.com",
+        "password": "StrongPass123!",
+        "code": _request_registration_code(client, "wrongcode@example.com"),
+    }
     register = client.post("/api/auth/register", json=payload)
     token = register.get_json()["access_token"]
     new_email = "another@example.com"
@@ -286,7 +319,11 @@ def test_email_change_confirm_rejects_wrong_code(client):
 
 def test_password_reset_request_and_confirm(client):
     email = "resetuser@example.com"
-    payload = {"email": email, "password": "StrongPass123!", "code": _request_registration_code(client, email)}
+    payload = {
+        "email": email,
+        "password": "StrongPass123!",
+        "code": _request_registration_code(client, email),
+    }
     client.post("/api/auth/register", json=payload)
 
     resp = client.post("/api/auth/password/reset/request", json={"identifier": email})
@@ -312,7 +349,11 @@ def test_password_reset_request_and_confirm(client):
 
 def test_password_reset_request_enforces_cooldown(client):
     email = "cooldown@example.com"
-    payload = {"email": email, "password": "StrongPass123!", "code": _request_registration_code(client, email)}
+    payload = {
+        "email": email,
+        "password": "StrongPass123!",
+        "code": _request_registration_code(client, email),
+    }
     client.post("/api/auth/register", json=payload)
 
     first = client.post("/api/auth/password/reset/request", json={"identifier": email})
@@ -339,7 +380,9 @@ def _request_registration_code(client, email: str) -> str:
     )
     assert resp.status_code == 200
     with client.application.app_context():
-        ticket = EmailVerificationTicket.query.filter_by(email=email.lower(), purpose="signup").first()
+        ticket = EmailVerificationTicket.query.filter_by(
+            email=email.lower(), purpose="signup"
+        ).first()
         assert ticket is not None
         return ticket.code
 
@@ -352,7 +395,8 @@ def _request_email_change_code(client, token: str, email: str) -> str:
     )
     assert resp.status_code == 200
     with client.application.app_context():
-        ticket = EmailVerificationTicket.query.filter_by(email=email.lower(), purpose="email_change").first()
+        ticket = EmailVerificationTicket.query.filter_by(
+            email=email.lower(), purpose="email_change"
+        ).first()
         assert ticket is not None
         return ticket.code
-

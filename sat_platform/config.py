@@ -33,15 +33,19 @@ class BaseConfig:
     AI_API_RETRY_BACKOFF = float(os.getenv("AI_API_RETRY_BACKOFF", "2.0"))
     AI_TIMEOUT_SECONDS = int(os.getenv("AI_TIMEOUT_SECONDS", "120"))
     AI_CONNECT_TIMEOUT_SEC = int(os.getenv("AI_CONNECT_TIMEOUT_SEC", "15"))
-    AI_READ_TIMEOUT_SEC = int(
-        os.getenv("AI_READ_TIMEOUT_SEC", str(AI_TIMEOUT_SECONDS))
-    )
+    AI_READ_TIMEOUT_SEC = int(os.getenv("AI_READ_TIMEOUT_SEC", str(AI_TIMEOUT_SECONDS)))
     # Use one global model knob for all AI capabilities.
     AI_EXPLAINER_MODEL = AI_MODEL_NAME
-    AI_EXPLAINER_ENABLE = os.getenv("AI_EXPLAINER_ENABLE", "true").lower() in {"1", "true", "yes"}
+    AI_EXPLAINER_ENABLE = os.getenv("AI_EXPLAINER_ENABLE", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
     ADAPTIVE_DEFAULT_MASTERY = float(os.getenv("ADAPTIVE_DEFAULT_MASTERY", "0.5"))
     ADAPTIVE_CORRECT_INCREMENT = float(os.getenv("ADAPTIVE_CORRECT_INCREMENT", "0.05"))
-    ADAPTIVE_INCORRECT_DECREMENT = float(os.getenv("ADAPTIVE_INCORRECT_DECREMENT", "0.1"))
+    ADAPTIVE_INCORRECT_DECREMENT = float(
+        os.getenv("ADAPTIVE_INCORRECT_DECREMENT", "0.1")
+    )
     ADAPTIVE_REVIEW_INTERVAL_DAYS = int(os.getenv("ADAPTIVE_REVIEW_INTERVAL_DAYS", "1"))
     PLAN_DEFAULT_MINUTES = int(os.getenv("PLAN_DEFAULT_MINUTES", "60"))
     PLAN_BLOCK_MINUTES = int(os.getenv("PLAN_BLOCK_MINUTES", "25"))
@@ -50,7 +54,9 @@ class BaseConfig:
     PLAN_DEFAULT_QUESTIONS = int(os.getenv("PLAN_DEFAULT_QUESTIONS", "12"))
     FREE_PLAN_TRIAL_DAYS = int(os.getenv("FREE_PLAN_TRIAL_DAYS", "7"))
     AI_EXPLAIN_FREE_DAILY_LIMIT = int(os.getenv("AI_EXPLAIN_FREE_DAILY_LIMIT", "5"))
-    MEMBERSHIP_MONTHLY_PRICE_CENTS = int(os.getenv("MEMBERSHIP_MONTHLY_PRICE_CENTS", "3900"))
+    MEMBERSHIP_MONTHLY_PRICE_CENTS = int(
+        os.getenv("MEMBERSHIP_MONTHLY_PRICE_CENTS", "3900")
+    )
     MEMBERSHIP_MONTHLY_DAYS = int(os.getenv("MEMBERSHIP_MONTHLY_DAYS", "30"))
     MEMBERSHIP_QUARTERLY_PRICE_CENTS = int(
         os.getenv("MEMBERSHIP_QUARTERLY_PRICE_CENTS", "9900")
@@ -58,9 +64,17 @@ class BaseConfig:
     MEMBERSHIP_QUARTERLY_DAYS = int(os.getenv("MEMBERSHIP_QUARTERLY_DAYS", "90"))
     MEMBERSHIP_CURRENCY = os.getenv("MEMBERSHIP_CURRENCY", "USD")
     ANALYTICS_HISTORY_DAYS = int(os.getenv("ANALYTICS_HISTORY_DAYS", "30"))
-    AI_DIAGNOSTIC_ENABLE = os.getenv("AI_DIAGNOSTIC_ENABLE", "true").lower() in {"1", "true", "yes"}
+    AI_DIAGNOSTIC_ENABLE = os.getenv("AI_DIAGNOSTIC_ENABLE", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
     AI_DIAGNOSTIC_MODEL = AI_MODEL_NAME
-    AI_PARSER_ENABLE = os.getenv("AI_PARSER_ENABLE", "true").lower() in {"1", "true", "yes"}
+    AI_PARSER_ENABLE = os.getenv("AI_PARSER_ENABLE", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
     AI_PARSER_MODEL = AI_MODEL_NAME
     AI_PDF_VISION_MODEL = AI_MODEL_NAME
     AI_PDF_NORMALIZE_MODEL = AI_MODEL_NAME
@@ -68,22 +82,31 @@ class BaseConfig:
     AI_TUTOR_NOTES_MODEL = AI_MODEL_NAME
     AI_PAPER_GENERATOR_MODEL = AI_MODEL_NAME
     AI_TUTOR_NOTES_ENABLE = (
-        os.getenv("AI_TUTOR_NOTES_ENABLE")
-        or os.getenv("AI_COACH_NOTES_ENABLE", "true")
+        os.getenv("AI_TUTOR_NOTES_ENABLE") or os.getenv("AI_COACH_NOTES_ENABLE", "true")
     ).lower() in {"1", "true", "yes"}
     PDF_INGEST_RESOLUTION = int(os.getenv("PDF_INGEST_RESOLUTION", "220"))
     PDF_INGEST_MAX_PAGES = int(os.getenv("PDF_INGEST_MAX_PAGES", "200"))
     PDF_INGEST_MAX_WORKERS = int(os.getenv("PDF_INGEST_MAX_WORKERS", "1"))
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-    RATE_LIMIT_DEFAULTS = [limit.strip() for limit in os.getenv("RATE_LIMIT_DEFAULTS", "200 per minute;1000 per day").split(";") if limit.strip()]
+    RATE_LIMIT_DEFAULTS = [
+        limit.strip()
+        for limit in os.getenv(
+            "RATE_LIMIT_DEFAULTS", "200 per minute;1000 per day"
+        ).split(";")
+        if limit.strip()
+    ]
     CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")
     JSON_SORT_KEYS = False
     FIGURE_URL_SECRET = os.getenv("FIGURE_URL_SECRET") or JWT_SECRET_KEY
     FIGURE_URL_SALT = os.getenv("FIGURE_URL_SALT", "figure-url")
     FIGURE_URL_TTL_PREVIEW = int(os.getenv("FIGURE_URL_TTL_PREVIEW", "600"))
     FIGURE_URL_TTL_PRACTICE = int(os.getenv("FIGURE_URL_TTL_PRACTICE", "1800"))
-    FIGURE_URL_RATE_LIMIT_PREVIEW = os.getenv("FIGURE_URL_RATE_LIMIT_PREVIEW", "30 per minute")
-    FIGURE_URL_RATE_LIMIT_PRACTICE = os.getenv("FIGURE_URL_RATE_LIMIT_PRACTICE", "60 per minute")
+    FIGURE_URL_RATE_LIMIT_PREVIEW = os.getenv(
+        "FIGURE_URL_RATE_LIMIT_PREVIEW", "30 per minute"
+    )
+    FIGURE_URL_RATE_LIMIT_PRACTICE = os.getenv(
+        "FIGURE_URL_RATE_LIMIT_PRACTICE", "60 per minute"
+    )
     ROOT_ADMIN_USERNAME = os.getenv("ROOT_ADMIN_USERNAME", "ha22y")
     ROOT_ADMIN_PASSWORD = os.getenv("ROOT_ADMIN_PASSWORD", "ChangeMeRootAdmin123!")
     ROOT_ADMIN_EMAIL = os.getenv("ROOT_ADMIN_EMAIL", "ha22y@example.com")
@@ -106,7 +129,11 @@ class BaseConfig:
     MAIL_REPLY_TO = os.getenv("MAIL_REPLY_TO", "")
     MAIL_IMAP_SERVER = os.getenv("MAIL_IMAP_SERVER", "imappro.zoho.com")
     MAIL_IMAP_PORT = int(os.getenv("MAIL_IMAP_PORT", "993"))
-    MAIL_IMAP_USE_SSL = os.getenv("MAIL_IMAP_USE_SSL", "true").lower() in {"1", "true", "yes"}
+    MAIL_IMAP_USE_SSL = os.getenv("MAIL_IMAP_USE_SSL", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
     # Frontend base URL used for building email links (reset password, etc.)
     FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
     SQLITE_TIMEOUT_SEC = int(os.getenv("SQLITE_TIMEOUT_SEC", "15"))
@@ -159,4 +186,3 @@ def resolve_config(name_or_class: Any) -> Any:
     if isinstance(name_or_class, str):
         return CONFIG_ALIASES.get(name_or_class, name_or_class)
     return name_or_class
-

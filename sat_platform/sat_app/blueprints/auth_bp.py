@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from http import HTTPStatus
 
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import current_user, get_jwt_identity, jwt_required
 from marshmallow import ValidationError
 from sqlalchemy import func
@@ -14,19 +14,19 @@ from ..extensions import db
 from ..models import User, UserProfile
 from ..schemas import (
     AdminCreateSchema,
+    EmailChangeConfirmSchema,
+    EmailChangeRequestSchema,
     LoginSchema,
+    PasswordChangeSchema,
+    PasswordResetConfirmSchema,
+    PasswordResetRequestSchema,
     RegisterSchema,
     UpdateProfileSchema,
-    PasswordChangeSchema,
-    PasswordResetRequestSchema,
-    PasswordResetConfirmSchema,
-    VerificationRequestSchema,
-    EmailChangeRequestSchema,
-    EmailChangeConfirmSchema,
     UserSchema,
+    VerificationRequestSchema,
 )
+from ..services import password_reset_service, verification_service
 from ..utils import generate_access_token, hash_password, verify_password
-from ..services import verification_service, password_reset_service
 
 auth_bp = Blueprint("auth_bp", __name__)
 
@@ -66,9 +66,7 @@ def register():
     username = None
     if payload.get("username"):
         username = payload["username"].lower()
-        if User.query.filter(
-            func.lower(User.username) == username
-        ).first():
+        if User.query.filter(func.lower(User.username) == username).first():
             return (
                 jsonify({"message": "Username already taken"}),
                 HTTPStatus.CONFLICT,
@@ -76,7 +74,10 @@ def register():
 
     code = payload.get("code")
     if not current_app.config.get("TESTING") and not code:
-        return jsonify({"message": "Verification code required"}), HTTPStatus.BAD_REQUEST
+        return (
+            jsonify({"message": "Verification code required"}),
+            HTTPStatus.BAD_REQUEST,
+        )
     if code:
         try:
             verification_service.consume_signup_code(email, code)
@@ -230,7 +231,10 @@ def update_profile():
 def change_password():
     payload = password_change_schema.load(request.get_json() or {})
     if not verify_password(payload["current_password"], current_user.password_hash):
-        return jsonify({"message": "Incorrect current password"}), HTTPStatus.BAD_REQUEST
+        return (
+            jsonify({"message": "Incorrect current password"}),
+            HTTPStatus.BAD_REQUEST,
+        )
     current_user.password_hash = hash_password(payload["new_password"])
     db.session.commit()
     return jsonify({"message": "Password updated"})
@@ -263,7 +267,9 @@ def password_reset_confirm():
 def request_email_change():
     payload = email_change_request_schema.load(request.get_json() or {})
     try:
-        verification_service.request_email_change_code(current_user, payload["new_email"])
+        verification_service.request_email_change_code(
+            current_user, payload["new_email"]
+        )
     except BadRequest as exc:
         return jsonify({"message": exc.description}), HTTPStatus.BAD_REQUEST
     return jsonify({"message": "sent"})
@@ -333,7 +339,8 @@ def _build_profile(profile_payload: dict) -> UserProfile:
     default_questions = current_app.config.get("PLAN_DEFAULT_QUESTIONS", 12)
     plan_questions = sanitized.get("daily_plan_questions") or default_questions
     sanitized.setdefault("daily_plan_questions", plan_questions)
-    sanitized.setdefault("daily_available_minutes", plan_questions * minutes_per_question)
+    sanitized.setdefault(
+        "daily_available_minutes", plan_questions * minutes_per_question
+    )
     sanitized.setdefault("language_preference", "bilingual")
     return UserProfile(**sanitized)
-

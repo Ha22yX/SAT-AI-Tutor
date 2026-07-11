@@ -2,11 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
 
-from ..models import Question, QuestionValidationIssue
 from ..extensions import db
-from .difficulty_service import difficulty_prompt_block
+from ..models import Question, QuestionValidationIssue
 from .skill_taxonomy import _SKILL_LOOKUP
-
 
 Issue = Dict[str, Any]
 
@@ -51,17 +49,28 @@ def validate_question(question: Question) -> Tuple[bool, List[Issue]]:
         schema = question.answer_schema or {}
         acceptable = schema.get("acceptable") if isinstance(schema, dict) else None
         if not correct_val and not acceptable:
-            add("missing_fill_answer", "Fill question needs a correct value or acceptable list")
+            add(
+                "missing_fill_answer",
+                "Fill question needs a correct value or acceptable list",
+            )
         if isinstance(acceptable, list):
             # SAT grid-in length hint: 5 chars max, decimal counts, leading minus ignored
             for ans in acceptable:
                 s = str(ans).strip()
                 if not s:
-                    add("empty_acceptable", "Empty acceptable answer", severity="warning")
+                    add(
+                        "empty_acceptable",
+                        "Empty acceptable answer",
+                        severity="warning",
+                    )
                     continue
                 length = len(s.lstrip("-"))
                 if length > 5:
-                    add("acceptable_length", f"Acceptable answer '{s}' exceeds 5 characters", severity="warning")
+                    add(
+                        "acceptable_length",
+                        f"Acceptable answer '{s}' exceeds 5 characters",
+                        severity="warning",
+                    )
     else:
         add("bad_type", f"Unknown question_type: {qtype}")
 
@@ -91,5 +100,3 @@ def record_issues(question: Question, issues: List[Issue]) -> None:
             )
         )
     db.session.commit()
-
-

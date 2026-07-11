@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import random
 from textwrap import dedent
 from typing import Dict, List
-
 
 SAT_RW_GUARDRAILS = dedent(
     """
@@ -151,17 +149,35 @@ RW_TYPE_RULES: Dict[str, Dict[str, str]] = {
 }
 
 RW_DOMAIN_SKILL: Dict[str, Dict[str, str]] = {
-    "main_idea": {"domain": "Information & Ideas", "skill": "Central Ideas and Details"},
-    "detail": {"domain": "Information & Ideas", "skill": "Command of Evidence – Textual"},
+    "main_idea": {
+        "domain": "Information & Ideas",
+        "skill": "Central Ideas and Details",
+    },
+    "detail": {
+        "domain": "Information & Ideas",
+        "skill": "Command of Evidence – Textual",
+    },
     "inference": {"domain": "Information & Ideas", "skill": "Inferences"},
     "vocabulary": {"domain": "Craft & Structure", "skill": "Words in Context"},
-    "logic": {"domain": "Expression of Ideas", "skill": "Transitions / Rhetorical flow"},
+    "logic": {
+        "domain": "Expression of Ideas",
+        "skill": "Transitions / Rhetorical flow",
+    },
     "purpose": {"domain": "Craft & Structure", "skill": "Text Structure and Purpose"},
-    "evidence_pair": {"domain": "Information & Ideas", "skill": "Command of Evidence – Textual"},
+    "evidence_pair": {
+        "domain": "Information & Ideas",
+        "skill": "Command of Evidence – Textual",
+    },
     "grammar": {"domain": "Standard English Conventions", "skill": "Usage & Mechanics"},
-    "grammar_complex": {"domain": "Standard English Conventions", "skill": "Advanced multi-rule editing"},
+    "grammar_complex": {
+        "domain": "Standard English Conventions",
+        "skill": "Advanced multi-rule editing",
+    },
 }
-DEFAULT_RW_DOMAIN = {"domain": "Information & Ideas", "skill": "Evidence-based reasoning"}
+DEFAULT_RW_DOMAIN = {
+    "domain": "Information & Ideas",
+    "skill": "Evidence-based reasoning",
+}
 RW_SKILL_TAGS: Dict[str, List[str]] = {
     "main_idea": ["RW_InformationIdeas"],
     "detail": ["RW_InformationIdeas"],
@@ -202,8 +218,8 @@ RW_STEM_PATTERNS: Dict[str, List[str]] = {
         "Which choice best supports the inference that {inference_target}?",
     ],
     "vocabulary": [
-        "As used in the passage, the word \"{target_word}\" most nearly means which choice?",
-        "In the passage, the word \"{target_word}\" is closest in meaning to which choice?",
+        'As used in the passage, the word "{target_word}" most nearly means which choice?',
+        'In the passage, the word "{target_word}" is closest in meaning to which choice?',
     ],
     "logic": [
         "Which choice best introduces the sentence that follows?",
@@ -385,13 +401,34 @@ MATH_TYPE_RULES: Dict[str, Dict[str, str]] = {
 MATH_DOMAIN_SKILL: Dict[str, Dict[str, str]] = {
     "algebra": {"domain": "Algebra", "skill": "Linear equations / systems"},
     "quadratic": {"domain": "Advanced Math", "skill": "Quadratic functions & forms"},
-    "ratio_statistics": {"domain": "Problem-Solving & Data Analysis", "skill": "Ratios / percentages / descriptive stats"},
-    "geometry": {"domain": "Geometry & Trigonometry", "skill": "Euclidean + coordinate geometry"},
-    "mixed_model": {"domain": "Problem-Solving & Data Analysis", "skill": "Modeling multi-step scenarios"},
-    "parameter_quadratic": {"domain": "Advanced Math", "skill": "Parameterized quadratics / discriminant"},
-    "statistics": {"domain": "Problem-Solving & Data Analysis", "skill": "Probability / standard deviation"},
-    "advanced_geometry": {"domain": "Geometry & Trigonometry", "skill": "Coordinate & circle constraints"},
-    "modeling": {"domain": "Algebra", "skill": "Multi-equation modeling / interpretation"},
+    "ratio_statistics": {
+        "domain": "Problem-Solving & Data Analysis",
+        "skill": "Ratios / percentages / descriptive stats",
+    },
+    "geometry": {
+        "domain": "Geometry & Trigonometry",
+        "skill": "Euclidean + coordinate geometry",
+    },
+    "mixed_model": {
+        "domain": "Problem-Solving & Data Analysis",
+        "skill": "Modeling multi-step scenarios",
+    },
+    "parameter_quadratic": {
+        "domain": "Advanced Math",
+        "skill": "Parameterized quadratics / discriminant",
+    },
+    "statistics": {
+        "domain": "Problem-Solving & Data Analysis",
+        "skill": "Probability / standard deviation",
+    },
+    "advanced_geometry": {
+        "domain": "Geometry & Trigonometry",
+        "skill": "Coordinate & circle constraints",
+    },
+    "modeling": {
+        "domain": "Algebra",
+        "skill": "Multi-equation modeling / interpretation",
+    },
 }
 DEFAULT_MATH_DOMAIN = {"domain": "Algebra", "skill": "General reasoning"}
 MATH_SKILL_TAGS: Dict[str, List[str]] = {
@@ -554,7 +591,9 @@ def build_outline_prompt(paper_name: str) -> str:
 
 
 def _rw_type_guidance(question_type: str, difficulty: str) -> str:
-    spec = RW_TYPE_RULES.get(question_type, {"base": "Follow SAT reading/writing conventions."})
+    spec = RW_TYPE_RULES.get(
+        question_type, {"base": "Follow SAT reading/writing conventions."}
+    )
     text = spec["base"]
     if difficulty == "hard" and spec.get("hard"):
         text += "\nHard-mode adjustments: " + spec["hard"]
@@ -577,7 +616,9 @@ def _format_seed_context(seed: dict | None) -> str:
         lines.append(f"• Modeling focus: {seed['context']}")
     if seed.get("detail"):
         lines.append(f"• Required detail: {seed['detail']}")
-    lines.append("• Invent new names, data points, and imagery; do not reuse phrasing from earlier questions.")
+    lines.append(
+        "• Invent new names, data points, and imagery; do not reuse phrasing from earlier questions."
+    )
     return "\n".join(lines)
 
 
@@ -766,5 +807,3 @@ def build_figure_prompt_guidance() -> str:
         Avoid colorful or playful styles; keep it exam-ready.
         """
     ).strip()
-
-

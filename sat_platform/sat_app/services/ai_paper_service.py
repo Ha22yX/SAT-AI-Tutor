@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import json
-import threading
-import time
-from collections import defaultdict
 import random
-from datetime import datetime, timedelta
 import re
+import threading
+from collections import defaultdict
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set
 
 from flask import current_app
@@ -17,19 +16,17 @@ from ..models import AIPaperJob, QuestionSource, User
 from ..models.question import Question
 from . import question_service
 from .ai_paper_prompts import (
-    DIGITAL_SAT_BLUEPRINT,
-    build_outline_prompt,
-    build_rw_question_prompt,
-    build_math_question_prompt,
+    MATH_TOPIC_SEEDS,
+    RW_TOPIC_SEEDS,
     build_explanation_prompt,
     build_figure_prompt_guidance,
-    RW_TOPIC_SEEDS,
-    MATH_TOPIC_SEEDS,
+    build_math_question_prompt,
+    build_outline_prompt,
+    build_rw_question_prompt,
 )
 from .openai_log import log_event
 from .pdf_ingest_service import _call_responses_api
-from .validation_service import validate_question, record_issues
-
+from .validation_service import record_issues, validate_question
 
 _JOB_CANCEL_EVENTS: Dict[int, threading.Event] = {}
 _JOB_THREADS: Dict[int, threading.Thread] = {}
@@ -39,20 +36,75 @@ DEFAULT_AUTO_RESUME_SECONDS = 180
 
 
 DEFAULT_ENGLISH_M1 = [
-    {"number_range": [1, 4], "type": "main_idea", "difficulty": "medium", "requires_passage": True},
-    {"number_range": [5, 8], "type": "inference", "difficulty": "medium", "requires_passage": True},
-    {"number_range": [9, 11], "type": "vocabulary", "difficulty": "medium", "requires_passage": True},
-    {"number_range": [12, 14], "type": "logic", "difficulty": "medium", "requires_passage": True},
-    {"number_range": [15, 18], "type": "evidence_pair", "difficulty": "medium", "requires_passage": True},
-    {"number_range": [19, 27], "type": "grammar", "difficulty": "medium", "requires_passage": False},
+    {
+        "number_range": [1, 4],
+        "type": "main_idea",
+        "difficulty": "medium",
+        "requires_passage": True,
+    },
+    {
+        "number_range": [5, 8],
+        "type": "inference",
+        "difficulty": "medium",
+        "requires_passage": True,
+    },
+    {
+        "number_range": [9, 11],
+        "type": "vocabulary",
+        "difficulty": "medium",
+        "requires_passage": True,
+    },
+    {
+        "number_range": [12, 14],
+        "type": "logic",
+        "difficulty": "medium",
+        "requires_passage": True,
+    },
+    {
+        "number_range": [15, 18],
+        "type": "evidence_pair",
+        "difficulty": "medium",
+        "requires_passage": True,
+    },
+    {
+        "number_range": [19, 27],
+        "type": "grammar",
+        "difficulty": "medium",
+        "requires_passage": False,
+    },
 ]
 
 DEFAULT_ENGLISH_M2 = [
-    {"number_range": [1, 6], "type": "inference", "difficulty": "hard", "requires_passage": True},
-    {"number_range": [7, 11], "type": "vocabulary", "difficulty": "hard", "requires_passage": True},
-    {"number_range": [12, 16], "type": "evidence_pair", "difficulty": "hard", "requires_passage": True},
-    {"number_range": [17, 20], "type": "logic", "difficulty": "hard", "requires_passage": True},
-    {"number_range": [21, 27], "type": "grammar_complex", "difficulty": "hard", "requires_passage": False},
+    {
+        "number_range": [1, 6],
+        "type": "inference",
+        "difficulty": "hard",
+        "requires_passage": True,
+    },
+    {
+        "number_range": [7, 11],
+        "type": "vocabulary",
+        "difficulty": "hard",
+        "requires_passage": True,
+    },
+    {
+        "number_range": [12, 16],
+        "type": "evidence_pair",
+        "difficulty": "hard",
+        "requires_passage": True,
+    },
+    {
+        "number_range": [17, 20],
+        "type": "logic",
+        "difficulty": "hard",
+        "requires_passage": True,
+    },
+    {
+        "number_range": [21, 27],
+        "type": "grammar_complex",
+        "difficulty": "hard",
+        "requires_passage": False,
+    },
 ]
 
 DEFAULT_MATH_M1 = [
@@ -168,7 +220,9 @@ def _legacy_slot_uid(module_code: str, slot_number: int) -> str:
     return f"{module_code}-{slot_number:02d}"
 
 
-def _collect_processed_slots(source_id: int, job_id: int, blueprint: dict | None = None) -> Set[str]:
+def _collect_processed_slots(
+    source_id: int, job_id: int, blueprint: dict | None = None
+) -> Set[str]:
     processed: Set[str] = set()
     fallback_counts: Dict[str, int] = defaultdict(int)
     questions = Question.query.filter_by(source_id=source_id).all()
@@ -192,7 +246,9 @@ def _collect_processed_slots(source_id: int, job_id: int, blueprint: dict | None
             if 0 <= module_index < len(blueprint.get("modules", [])):
                 module_code = blueprint["modules"][module_index]["code"]
                 fallback_counts[module_code] += 1
-                processed.add(_slot_uid(job_id, module_code, fallback_counts[module_code]))
+                processed.add(
+                    _slot_uid(job_id, module_code, fallback_counts[module_code])
+                )
     return processed
 
 
@@ -258,7 +314,9 @@ def _select_topic_seed(
                 return candidate
         return None
 
-    choice = _pick(lambda seed_id: seed_id not in used_ids and seed_id not in recent_ids)
+    choice = _pick(
+        lambda seed_id: seed_id not in used_ids and seed_id not in recent_ids
+    )
     if choice:
         return choice
     choice = _pick(lambda seed_id: seed_id not in used_ids)
@@ -337,7 +395,9 @@ def _prepare_correct_answer(data: dict) -> Dict[str, str] | None:
     return {"value": str(value).strip().upper()}
 
 
-def _call_question_model(prompt_text: str, *, purpose: str, job_id: int | None) -> dict | None:
+def _call_question_model(
+    prompt_text: str, *, purpose: str, job_id: int | None
+) -> dict | None:
     system_prompt = (
         "You are the lead Digital SAT test developer. Respond with STRICT JSON only—no prose, "
         "no markdown. Follow the provided instructions exactly and ensure every object includes "
@@ -349,7 +409,10 @@ def _call_question_model(prompt_text: str, *, purpose: str, job_id: int | None) 
             current_app.config.get("AI_MODEL_NAME", "gpt-5.4"),
         ),
         "input": [
-            {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+            {
+                "role": "system",
+                "content": [{"type": "input_text", "text": system_prompt}],
+            },
             {"role": "user", "content": [{"type": "input_text", "text": prompt_text}]},
         ],
         "temperature": 0.3,
@@ -358,7 +421,9 @@ def _call_question_model(prompt_text: str, *, purpose: str, job_id: int | None) 
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
-        current_app.logger.warning("AI paper generator produced invalid JSON: %s", raw[:400])
+        current_app.logger.warning(
+            "AI paper generator produced invalid JSON: %s", raw[:400]
+        )
         return None
 
 
@@ -391,11 +456,17 @@ def _build_question_payload(
     decorations.extend(stem_decorations)
     passage_payload = None
     if passage_text:
-        passage_text, passage_decorations = _strip_inline_underlines(passage_text, target="passage")
+        passage_text, passage_decorations = _strip_inline_underlines(
+            passage_text, target="passage"
+        )
         decorations.extend(passage_decorations)
         passage_payload = {
             "content_text": passage_text,
-            "metadata": {"source": "ai_paper", "module": module["code"], "slot": slot_number},
+            "metadata": {
+                "source": "ai_paper",
+                "module": module["code"],
+                "slot": slot_number,
+            },
         }
         if passage_decorations:
             passage_payload["metadata"]["decorations"] = passage_decorations
@@ -451,7 +522,9 @@ def _build_question_payload(
         "stem_text": stem,
         "choices": choices,
         "correct_answer": correct,
-        "difficulty_level": _difficulty_level(section_info.get("difficulty") or module["difficulty"]),
+        "difficulty_level": _difficulty_level(
+            section_info.get("difficulty") or module["difficulty"]
+        ),
         "has_figure": bool(data.get("has_figure") or requires_figure_override),
         "skill_tags": normalized_tags,
         "metadata": metadata,
@@ -464,11 +537,11 @@ def _build_question_payload(
         figure_prompt = data.get("figure_prompt") or metadata.get("figure_prompt")
         if not figure_prompt:
             if module.get("subject") == "math":
-                figure_prompt = (
-                    "Render a clean SAT-style table summarizing the given data with labeled rows/columns and units."
-                )
+                figure_prompt = "Render a clean SAT-style table summarizing the given data with labeled rows/columns and units."
             else:
-                figure_prompt = "Provide a concise diagram/table description suitable for SAT."
+                figure_prompt = (
+                    "Provide a concise diagram/table description suitable for SAT."
+                )
         metadata["figure_prompt"] = figure_prompt
     return payload
 
@@ -507,7 +580,9 @@ def _create_question_from_prompt(
         if not data:
             continue
         if isinstance(data, list):
-            dict_candidate = next((item for item in data if isinstance(item, dict)), None)
+            dict_candidate = next(
+                (item for item in data if isinstance(item, dict)), None
+            )
             data = dict_candidate or {}
         if not isinstance(data, dict) or not data:
             _log_job_event(
@@ -581,7 +656,9 @@ def _create_question_from_prompt(
     return None
 
 
-def create_ai_paper_job(name: str, user: User, config: Dict[str, Any] | None = None) -> AIPaperJob:
+def create_ai_paper_job(
+    name: str, user: User, config: Dict[str, Any] | None = None
+) -> AIPaperJob:
     if not user or not getattr(user, "id", None):
         raise ValueError("A valid user is required to create an AI paper job.")
     _ensure_ai_paper_columns_runtime()
@@ -599,9 +676,8 @@ def create_ai_paper_job(name: str, user: User, config: Dict[str, Any] | None = N
 
 
 def list_ai_paper_jobs(page: int = 1, per_page: int = 20):
-    return (
-        AIPaperJob.query.order_by(AIPaperJob.created_at.desc())
-        .paginate(page=page, per_page=per_page, error_out=False)
+    return AIPaperJob.query.order_by(AIPaperJob.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
     )
 
 
@@ -622,7 +698,9 @@ def _spawn_background_job(job_id: int) -> None:
                 _JOB_CANCEL_EVENTS.pop(job_id, None)
                 _JOB_THREADS.pop(job_id, None)
 
-    thread = threading.Thread(target=_runner, name=f"ai-paper-job-{job_id}", daemon=True)
+    thread = threading.Thread(
+        target=_runner, name=f"ai-paper-job-{job_id}", daemon=True
+    )
     with _JOB_REGISTRY_LOCK:
         _JOB_CANCEL_EVENTS[job_id] = cancel_event
         _JOB_THREADS[job_id] = thread
@@ -684,7 +762,9 @@ def _run_job(job_id: int, cancel_event: Optional[threading.Event] = None) -> Non
         job.status_message = message
         job.updated_at = datetime.utcnow()
         db.session.commit()
-        _log_job_event(job.id, stage=stage_key, message=message, extra={"progress": job.progress})
+        _log_job_event(
+            job.id, stage=stage_key, message=message, extra={"progress": job.progress}
+        )
 
     try:
         job.status = "running"
@@ -696,12 +776,19 @@ def _run_job(job_id: int, cancel_event: Optional[threading.Event] = None) -> Non
             job.status_message = "Queued for generation"
         job.updated_at = datetime.utcnow()
         db.session.commit()
-        _log_job_event(job.id, stage="queued", message="Job scheduled", extra={"progress": job.progress})
+        _log_job_event(
+            job.id,
+            stage="queued",
+            message="Job scheduled",
+            extra={"progress": job.progress},
+        )
         if abort_if_cancelled("Job cancelled before start"):
             return
 
         blueprint = job.config.get("blueprint")
-        question_prompt_bundles: Dict[str, List[Dict[str, Any]]] = job.config.get("question_prompts") or {}
+        question_prompt_bundles: Dict[str, List[Dict[str, Any]]] = (
+            job.config.get("question_prompts") or {}
+        )
         if not blueprint:
             blueprint = default_blueprint()
             total_slots = sum(
@@ -743,7 +830,9 @@ def _run_job(job_id: int, cancel_event: Optional[threading.Event] = None) -> Non
                 for module in blueprint["modules"]
             ]
         )
-        stage_plan.append(("finalizing", "Finalizing collection and linking to question bank"))
+        stage_plan.append(
+            ("finalizing", "Finalizing collection and linking to question bank")
+        )
         stage_index_map = {key: idx for idx, (key, _) in enumerate(stage_plan)}
 
         uploader_id = job.created_by_id
@@ -755,10 +844,14 @@ def _run_job(job_id: int, cancel_event: Optional[threading.Event] = None) -> Non
             job.error = "No uploader available for generated paper."
             job.updated_at = datetime.utcnow()
             db.session.commit()
-            _log_job_event(job.id, stage="error", message="No uploader available", state="error")
+            _log_job_event(
+                job.id, stage="error", message="No uploader available", state="error"
+            )
             return
 
-        source = db.session.get(QuestionSource, job.source_id) if job.source_id else None
+        source = (
+            db.session.get(QuestionSource, job.source_id) if job.source_id else None
+        )
         if not source:
             source = QuestionSource(
                 filename=f"{job.name}.json",
@@ -775,7 +868,9 @@ def _run_job(job_id: int, cancel_event: Optional[threading.Event] = None) -> Non
         processed_slots = _collect_processed_slots(source.id, job.id, blueprint)
         recent_topic_ids = _load_recent_topic_seeds()
         used_topic_ids: Set[str] = set(_collect_topic_seeds_for_source(source.id))
-        job.completed_tasks = min(len(processed_slots), job.total_tasks or len(processed_slots))
+        job.completed_tasks = min(
+            len(processed_slots), job.total_tasks or len(processed_slots)
+        )
         if job.total_tasks:
             job.progress = int((job.completed_tasks / job.total_tasks) * 100)
         job.stage = "outline"
@@ -783,7 +878,12 @@ def _run_job(job_id: int, cancel_event: Optional[threading.Event] = None) -> Non
         job.status_message = "Blueprint ready; continuing generation"
         job.updated_at = datetime.utcnow()
         db.session.commit()
-        _log_job_event(job.id, stage="outline", message="Blueprint ready", extra={"total_tasks": job.total_tasks})
+        _log_job_event(
+            job.id,
+            stage="outline",
+            message="Blueprint ready",
+            extra={"total_tasks": job.total_tasks},
+        )
 
         failed_slots: List[str] = []
         for module_index, module in enumerate(blueprint["modules"], start=1):
@@ -799,10 +899,13 @@ def _run_job(job_id: int, cancel_event: Optional[threading.Event] = None) -> Non
             stage_key = f"module_{module['code'].lower()}"
             module_has_work = False
             for section in module["questions"]:
-                requires_passage = section.get("requires_passage", module.get("subject") == "reading_writing")
+                requires_passage = section.get(
+                    "requires_passage", module.get("subject") == "reading_writing"
+                )
                 requires_figure = section.get("requires_figure", False)
                 force_figure = requires_figure or (
-                    module.get("subject") == "math" and section.get("type") in {"ratio_statistics", "statistics"}
+                    module.get("subject") == "math"
+                    and section.get("type") in {"ratio_statistics", "statistics"}
                 )
                 slot_start, slot_end = section["number_range"]
                 for slot_number in range(slot_start, slot_end + 1):
@@ -813,9 +916,19 @@ def _run_job(job_id: int, cancel_event: Optional[threading.Event] = None) -> Non
                     if slot_id in processed_slots or legacy_id in processed_slots:
                         continue
                     if not module_has_work:
-                        set_stage(stage_key, f"Generating {module['label']} ({module['difficulty'].title()} level)")
+                        set_stage(
+                            stage_key,
+                            f"Generating {module['label']} ({module['difficulty'].title()} level)",
+                        )
                         module_has_work = True
-                    slot_entry = next((entry for entry in module_prompts if entry.get("slot") == slot_number), None)
+                    slot_entry = next(
+                        (
+                            entry
+                            for entry in module_prompts
+                            if entry.get("slot") == slot_number
+                        ),
+                        None,
+                    )
                     config_dirty = False
                     subject = module.get("subject", "")
                     topic_seed = None
@@ -895,7 +1008,10 @@ def _run_job(job_id: int, cancel_event: Optional[threading.Event] = None) -> Non
                     if topic_seed and topic_seed.get("id"):
                         used_topic_ids.add(topic_seed["id"])
                     if config_dirty:
-                        job.config = {**job.config, "question_prompts": question_prompt_bundles}
+                        job.config = {
+                            **job.config,
+                            "question_prompts": question_prompt_bundles,
+                        }
                         db.session.commit()
                     _log_job_event(
                         job.id,
@@ -918,13 +1034,20 @@ def _run_job(job_id: int, cancel_event: Optional[threading.Event] = None) -> Non
                     )
                     if question:
                         processed_slots.add(slot_id)
-                        job.completed_tasks = min(job.completed_tasks + 1, job.total_tasks)
+                        job.completed_tasks = min(
+                            job.completed_tasks + 1, job.total_tasks
+                        )
                         if job.total_tasks:
                             job.progress = max(
                                 1,
-                                min(99, int((job.completed_tasks / job.total_tasks) * 100)),
+                                min(
+                                    99,
+                                    int((job.completed_tasks / job.total_tasks) * 100),
+                                ),
                             )
-                        job.status_message = f"{module['label']} · question {slot_number} generated"
+                        job.status_message = (
+                            f"{module['label']} · question {slot_number} generated"
+                        )
                         _log_job_event(
                             job.id,
                             stage=stage_key,
@@ -957,8 +1080,8 @@ def _run_job(job_id: int, cancel_event: Optional[threading.Event] = None) -> Non
             job.progress = min(100, int((job.completed_tasks / job.total_tasks) * 100))
         if failed_slots:
             job.status = "completed"
-            job.error = (
-                f"Failed slots: {', '.join(failed_slots[:8])}" + ("..." if len(failed_slots) > 8 else "")
+            job.error = f"Failed slots: {', '.join(failed_slots[:8])}" + (
+                "..." if len(failed_slots) > 8 else ""
             )
             job.status_message = (
                 f"Generated {job.completed_tasks}/{job.total_tasks} questions "
@@ -1003,7 +1126,13 @@ def _queue_job_for_resume(job: AIPaperJob, message: str) -> AIPaperJob:
     job.error = None
     job.updated_at = datetime.utcnow()
     db.session.commit()
-    _log_job_event(job.id, stage="queued", message=message, state="info", extra={"progress": job.progress})
+    _log_job_event(
+        job.id,
+        stage="queued",
+        message=message,
+        state="info",
+        extra={"progress": job.progress},
+    )
     _spawn_background_job(job.id)
     return job
 
@@ -1020,13 +1149,16 @@ def resume_ai_paper_job(job_id: int) -> AIPaperJob:
 def auto_resume_stalled_jobs(max_age_seconds: int | None = None) -> list[int]:
     """Automatically re-queue any job that has been idle for too long."""
     threshold = max_age_seconds or int(
-        current_app.config.get("AI_PAPER_AUTO_RESUME_SECONDS", DEFAULT_AUTO_RESUME_SECONDS)
+        current_app.config.get(
+            "AI_PAPER_AUTO_RESUME_SECONDS", DEFAULT_AUTO_RESUME_SECONDS
+        )
     )
     now = datetime.utcnow()
     stale_before = now - timedelta(seconds=threshold)
     candidates = (
         AIPaperJob.query.filter(
-            AIPaperJob.status.in_(("running", "pending")), AIPaperJob.updated_at < stale_before
+            AIPaperJob.status.in_(("running", "pending")),
+            AIPaperJob.updated_at < stale_before,
         )
         .order_by(AIPaperJob.updated_at.asc())
         .all()
@@ -1054,7 +1186,9 @@ def delete_ai_paper_job(job_id: int) -> None:
         if cancel_event:
             cancel_event.set()
         if thread and thread.is_alive():
-            timeout = current_app.config.get("AI_PAPER_CANCEL_TIMEOUT", DEFAULT_CANCEL_TIMEOUT)
+            timeout = current_app.config.get(
+                "AI_PAPER_CANCEL_TIMEOUT", DEFAULT_CANCEL_TIMEOUT
+            )
             thread.join(timeout=timeout)
             if thread.is_alive():
                 raise RuntimeError("job_cancel_timeout")
@@ -1070,4 +1204,3 @@ def delete_ai_paper_job(job_id: int) -> None:
         question_service.cleanup_source_if_unused(source_id)
     db.session.delete(job)
     db.session.commit()
-

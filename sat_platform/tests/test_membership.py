@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from sat_app.extensions import db
-from sat_app.models import User, DiagnosticAttempt, Question
+from sat_app.models import DiagnosticAttempt, Question, User
 
 
 def _auth(token: str) -> dict[str, str]:
@@ -62,11 +62,15 @@ def test_ai_explain_quota_enforced(client, app_with_db, student_token, monkeypat
     def _fake_explainer(**kwargs):
         return {"steps": [], "language": "en"}
 
-    monkeypatch.setattr("sat_app.services.ai_explainer.generate_explanation", _fake_explainer)
+    monkeypatch.setattr(
+        "sat_app.services.ai_explainer.generate_explanation", _fake_explainer
+    )
 
     payload = {"question_id": question_id, "user_answer": {"value": "A"}}
     for _ in range(5):
-        resp = client.post("/api/ai/explain", json=payload, headers=_auth(student_token))
+        resp = client.post(
+            "/api/ai/explain", json=payload, headers=_auth(student_token)
+        )
         assert resp.status_code == 200
     final = client.post("/api/ai/explain", json=payload, headers=_auth(student_token))
     assert final.status_code == 429
@@ -85,7 +89,9 @@ def test_student_can_create_membership_order(client, student_token):
     assert data["order"]["plan"] == "monthly"
 
 
-def test_admin_can_approve_membership_order(client, app_with_db, student_token, admin_token):
+def test_admin_can_approve_membership_order(
+    client, app_with_db, student_token, admin_token
+):
     create_resp = client.post(
         "/api/membership/orders",
         json={"plan": "quarterly"},
@@ -106,4 +112,3 @@ def test_admin_can_approve_membership_order(client, app_with_db, student_token, 
     with app_with_db.app_context():
         user = User.query.filter_by(email="student@example.com").first()
         assert user.membership_expires_at is not None
-

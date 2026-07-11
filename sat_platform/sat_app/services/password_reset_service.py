@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlencode
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 from flask import current_app, render_template, request
 from werkzeug.exceptions import BadRequest
@@ -54,7 +53,10 @@ def request_password_reset(identifier: str) -> None:
 
     now = _now()
     last_request = _coerce_aware(user.password_reset_requested_at)
-    if last_request and (now - last_request).total_seconds() < RESET_RESEND_INTERVAL_SECONDS:
+    if (
+        last_request
+        and (now - last_request).total_seconds() < RESET_RESEND_INTERVAL_SECONDS
+    ):
         raise BadRequest("reset_recent")
 
     raw_token = secrets.token_urlsafe(48)
@@ -139,10 +141,9 @@ def _build_reset_url(token: str) -> str:
     FRONTEND_BASE_URL can be just the base (e.g. http://3.238.9.209:3000); we append
     /auth/reset-password automatically. If a path exists, we keep it then append reset path.
     """
-    raw_base = (
-        (current_app.config.get("FRONTEND_BASE_URL") or "").strip()
-        or (current_app.config.get("PASSWORD_RESET_URL") or "").strip()
-    )
+    raw_base = (current_app.config.get("FRONTEND_BASE_URL") or "").strip() or (
+        current_app.config.get("PASSWORD_RESET_URL") or ""
+    ).strip()
     if not raw_base:
         raw_base = "http://localhost:3000"
 
@@ -198,4 +199,3 @@ def _resolve_language(user: User) -> str:
     if "zh" in pref:
         return "zh"
     return "en"
-

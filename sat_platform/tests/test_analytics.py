@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from sat_app.extensions import db
 from sat_app.models import Question
 
@@ -52,7 +51,11 @@ def _start_and_answer(client, token, question_id):
 def test_progress_endpoint(client, student_token, question_fixture, monkeypatch):
     monkeypatch.setattr(
         "sat_app.services.ai_explainer.generate_explanation",
-        lambda *args, **kwargs: {"protocol_version": "1.0", "question_id": question_fixture, "explanation_blocks": []},
+        lambda *args, **kwargs: {
+            "protocol_version": "1.0",
+            "question_id": question_fixture,
+            "explanation_blocks": [],
+        },
     )
     _start_and_answer(client, student_token, question_fixture)
 
@@ -69,11 +72,22 @@ def test_progress_endpoint(client, student_token, question_fixture, monkeypatch)
 def test_ai_diagnose_endpoint(client, student_token, question_fixture, monkeypatch):
     monkeypatch.setattr(
         "sat_app.services.ai_explainer.generate_explanation",
-        lambda *args, **kwargs: {"protocol_version": "1.0", "question_id": question_fixture, "explanation_blocks": []},
+        lambda *args, **kwargs: {
+            "protocol_version": "1.0",
+            "question_id": question_fixture,
+            "explanation_blocks": [],
+        },
     )
     monkeypatch.setattr(
         "sat_app.services.ai_diagnostic.generate_report",
-        lambda user_id: type("Report", (), {"predictor_payload": {"rw": 500, "math": 510}, "narrative": {"protocol_version": "diag"}})(),
+        lambda user_id: type(
+            "Report",
+            (),
+            {
+                "predictor_payload": {"rw": 500, "math": 510},
+                "narrative": {"protocol_version": "diag"},
+            },
+        )(),
     )
     _start_and_answer(client, student_token, question_fixture)
 
@@ -85,4 +99,3 @@ def test_ai_diagnose_endpoint(client, student_token, question_fixture, monkeypat
     body = resp.get_json()
     assert body["predictor"]["rw"] == 500
     assert body["narrative"]["protocol_version"] == "diag"
-

@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from time import sleep
-from typing import List, Optional, Dict, Iterable, Any
+from typing import Any, Dict, Iterable, List, Optional
 
-from sqlalchemy.exc import OperationalError
-from sqlalchemy import or_
 from flask import current_app, url_for
-import re
+from sqlalchemy import or_
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm.attributes import flag_modified
-from ..utils.signed_urls import sign_payload
 
 from ..extensions import db
 from ..models import Question, StudySession, UserQuestionLog
-from . import adaptive_engine, spaced_repetition, analytics_service
+from ..utils.signed_urls import sign_payload
+from . import adaptive_engine, analytics_service, spaced_repetition
 from .difficulty_service import update_question_difficulty_stats
 
 
@@ -41,7 +41,9 @@ def _is_question_valid(question: Question | None) -> bool:
     return True
 
 
-def _round_robin_by_difficulty(candidates: Iterable[Question], limit: int) -> List[Question]:
+def _round_robin_by_difficulty(
+    candidates: Iterable[Question], limit: int
+) -> List[Question]:
     """Ensure we don't return only 'easy' questions when variety exists."""
     buckets: Dict[int, List[Question]] = {}
     for question in candidates:
@@ -80,7 +82,11 @@ def select_questions(
         query = Question.query.filter_by(source_id=source_id)
         if section:
             query = query.filter_by(section=section)
-        pool = [q for q in query.order_by(Question.id.asc()).all() if q.id not in excluded_set]
+        pool = [
+            q
+            for q in query.order_by(Question.id.asc()).all()
+            if q.id not in excluded_set
+        ]
         # Admin “test this collection” expects all questions in the collection, not a sample.
         return pool
 
@@ -93,7 +99,9 @@ def select_questions(
         include_due=include_due,
         last_summary=last_summary,
     )
-    filtered: List[Question] = [q for q in initial if q.id not in excluded_set and _is_question_valid(q)]
+    filtered: List[Question] = [
+        q for q in initial if q.id not in excluded_set and _is_question_valid(q)
+    ]
     initial_count = len(filtered)
     if len(filtered) >= num_questions:
         final_selection = filtered[:num_questions]
@@ -137,13 +145,21 @@ def select_questions(
         ]
         if not fallback:
             fallback = [
-                q for q in query.order_by(db.func.random()).all() if q.id not in used_ids and _is_question_valid(q)
+                q
+                for q in query.order_by(db.func.random()).all()
+                if q.id not in used_ids and _is_question_valid(q)
             ]
         prioritized = [q for q in fallback if focus_skill in (q.skill_tags or [])]
-        prioritized.extend([q for q in fallback if focus_skill not in (q.skill_tags or [])])
+        prioritized.extend(
+            [q for q in fallback if focus_skill not in (q.skill_tags or [])]
+        )
         extras = _round_robin_by_difficulty(prioritized, needed)
     else:
-        fallback = [q for q in query.order_by(db.func.random()).all() if q.id not in used_ids and _is_question_valid(q)]
+        fallback = [
+            q
+            for q in query.order_by(db.func.random()).all()
+            if q.id not in used_ids and _is_question_valid(q)
+        ]
         extras = _round_robin_by_difficulty(fallback, needed)
 
     filtered.extend(extras)
@@ -217,7 +233,9 @@ def _parse_numeric(value: str):
     if not raw:
         return None
     # simple fraction support
-    if "/" in raw and all(part.replace(".", "", 1).lstrip("-").isdigit() for part in raw.split("/", 1)):
+    if "/" in raw and all(
+        part.replace(".", "", 1).lstrip("-").isdigit() for part in raw.split("/", 1)
+    ):
         try:
             num, den = raw.split("/", 1)
             return float(num) / float(den)
@@ -273,7 +291,9 @@ def _eval_fill_answer(question: Question, user_answer: dict) -> bool:
         return False
 
 
-def log_answer(session: StudySession, question: Question, payload: dict, user_id: int) -> UserQuestionLog:
+def log_answer(
+    session: StudySession, question: Question, payload: dict, user_id: int
+) -> UserQuestionLog:
     qtype = getattr(question, "question_type", "choice") or "choice"
     if qtype == "fill":
         is_correct = _eval_fill_answer(question, payload.get("user_answer") or {})
@@ -300,7 +320,9 @@ def log_answer(session: StudySession, question: Question, payload: dict, user_id
         try:
             from flask import current_app  # lazy import to avoid circularity
 
-            current_app.logger.warning("Failed to update difficulty stats", exc_info=True)
+            current_app.logger.warning(
+                "Failed to update difficulty stats", exc_info=True
+            )
         except Exception:
             pass
     return log
@@ -337,7 +359,9 @@ def abort_session(session: StudySession) -> StudySession:
     return session
 
 
-def get_active_session(user_id: int, *, include_plan: bool = True) -> Optional[StudySession]:
+def get_active_session(
+    user_id: int, *, include_plan: bool = True
+) -> Optional[StudySession]:
     query = StudySession.query.filter_by(user_id=user_id, ended_at=None)
     if not include_plan:
         query = query.filter(StudySession.session_type != "plan")
@@ -455,9 +479,17 @@ def refresh_assigned_questions(session: StudySession | None, *, commit: bool = T
         if entry.get("question_id") and entry.get("log_id")
     }
     original_count = len(assigned)
-    question_ids = [entry.get("question_id") for entry in assigned if entry.get("question_id")]
-    questions = Question.query.filter(Question.id.in_(question_ids)).all() if question_ids else []
-    serialized_map = {question.id: _serialize_question(question) for question in questions}
+    question_ids = [
+        entry.get("question_id") for entry in assigned if entry.get("question_id")
+    ]
+    questions = (
+        Question.query.filter(Question.id.in_(question_ids)).all()
+        if question_ids
+        else []
+    )
+    serialized_map = {
+        question.id: _serialize_question(question) for question in questions
+    }
     refreshed_entries = []
     used_ids = set(serialized_map.keys())
     mutated = False
@@ -518,7 +550,9 @@ def refresh_assigned_questions(session: StudySession | None, *, commit: bool = T
         )
         if extras:
             refreshed_entries.extend(extras)
-            used_ids.update([entry["question_id"] for entry in extras if entry.get("question_id")])
+            used_ids.update(
+                [entry["question_id"] for entry in extras if entry.get("question_id")]
+            )
             mutated = True
 
     if not refreshed_entries:
@@ -555,12 +589,20 @@ def _select_replacement_question(
             query = query.filter(or_(*conditions))
     if exclude_ids:
         query = query.filter(~Question.id.in_(exclude_ids))
-    candidates = [q for q in query.order_by(db.func.random()).limit(10).all() if _is_question_valid(q)]
+    candidates = [
+        q
+        for q in query.order_by(db.func.random()).limit(10).all()
+        if _is_question_valid(q)
+    ]
     if not candidates and section:
         fallback = Question.query.filter(Question.section == section)
         if exclude_ids:
             fallback = fallback.filter(~Question.id.in_(exclude_ids))
-        candidates = [q for q in fallback.order_by(db.func.random()).limit(10).all() if _is_question_valid(q)]
+        candidates = [
+            q
+            for q in fallback.order_by(db.func.random()).limit(10).all()
+            if _is_question_valid(q)
+        ]
     if not candidates:
         return None
     if skill_tags:
@@ -643,7 +685,9 @@ def _reseed_session_questions(session: StudySession, desired_count: int):
     return serialized
 
 
-def _append_question_progress(session: StudySession, question: Question, log: UserQuestionLog) -> None:
+def _append_question_progress(
+    session: StudySession, question: Question, log: UserQuestionLog
+) -> None:
     progress_list = session.questions_done or []
     diagnostic_skill = None
     for assigned in session.questions_assigned or []:
@@ -658,7 +702,8 @@ def _append_question_progress(session: StudySession, question: Question, log: Us
                     "answered_at": log.answered_at.isoformat(),
                     "is_correct": log.is_correct,
                     "user_answer": log.user_answer,
-                    "diagnostic_skill": diagnostic_skill or entry.get("diagnostic_skill"),
+                    "diagnostic_skill": diagnostic_skill
+                    or entry.get("diagnostic_skill"),
                 }
             )
             break
@@ -697,7 +742,9 @@ def _build_session_summary(session: StudySession) -> Optional[dict]:
     progress_list = session.questions_done or []
     if not progress_list:
         return None
-    question_ids = [entry.get("question_id") for entry in progress_list if entry.get("question_id")]
+    question_ids = [
+        entry.get("question_id") for entry in progress_list if entry.get("question_id")
+    ]
     if not question_ids:
         return None
     questions = Question.query.filter(Question.id.in_(question_ids)).all()
@@ -713,7 +760,7 @@ def _build_session_summary(session: StudySession) -> Optional[dict]:
         total += 1
         if entry.get("is_correct"):
             correct += 1
-        for tag in (question.skill_tags or []):
+        for tag in question.skill_tags or []:
             stats = skills.setdefault(tag, {"total": 0, "correct": 0})
             stats["total"] += 1
             if entry.get("is_correct"):
@@ -729,4 +776,3 @@ def _build_session_summary(session: StudySession) -> Optional[dict]:
         "accuracy": overall_accuracy,
         "skills": skills,
     }
-

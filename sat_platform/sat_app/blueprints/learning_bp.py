@@ -4,34 +4,32 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from pathlib import Path
-from typing import Optional
 
-from flask import Blueprint, jsonify, request, abort, send_file, current_app
+from flask import Blueprint, abort, current_app, jsonify, request, send_file
 from flask_jwt_extended import current_user, jwt_required
 from itsdangerous import BadSignature, SignatureExpired
 from marshmallow import ValidationError
-
 from werkzeug.exceptions import BadRequest
 
-from ..models import Question, StudySession, UserQuestionLog, QuestionFigure
+from ..extensions import db, limiter
+from ..models import Question, QuestionFigure, StudySession, UserQuestionLog
 from ..schemas import (
     SessionAnswerSchema,
+    SessionExplanationSchema,
     SessionSchema,
     SessionStartSchema,
-    SessionExplanationSchema,
 )
 from ..services import (
-    session_service,
     adaptive_engine,
-    learning_plan_service,
-    tutor_notes_service,
     diagnostic_service,
+    learning_plan_service,
     membership_service,
-    question_explanation_service,
     progress_service,
+    question_explanation_service,
+    session_service,
+    tutor_notes_service,
 )
-from ..extensions import db, limiter
-from ..utils.signed_urls import sign_payload, verify_payload
+from ..utils.signed_urls import verify_payload
 
 learning_bp = Blueprint("learning_bp", __name__)
 
@@ -56,12 +54,16 @@ def _figure_signing_config():
     }
 
 
-def _verify_figure_token(figure_id: int, scope: str, *, allow_admin_fallback: bool = True) -> None:
+def _verify_figure_token(
+    figure_id: int, scope: str, *, allow_admin_fallback: bool = True
+) -> None:
     """Validate signed token on figure fetch; optionally allow admin fallback."""
 
     token = request.args.get("sig") or request.args.get("token")
     cfg = _figure_signing_config()
-    max_age = cfg["ttl_preview"] if scope == FIGURE_SCOPE_PREVIEW else cfg["ttl_practice"]
+    max_age = (
+        cfg["ttl_preview"] if scope == FIGURE_SCOPE_PREVIEW else cfg["ttl_practice"]
+    )
     if token:
         try:
             payload = verify_payload(
@@ -74,12 +76,19 @@ def _verify_figure_token(figure_id: int, scope: str, *, allow_admin_fallback: bo
             abort(401)
         except BadSignature:
             abort(401)
-        if int(payload.get("fid", -1)) != int(figure_id) or payload.get("scope") != scope:
+        if (
+            int(payload.get("fid", -1)) != int(figure_id)
+            or payload.get("scope") != scope
+        ):
             abort(403)
         return
 
     # Fallback: allow admins with an active JWT to bypass signature (for debugging/tools).
-    if allow_admin_fallback and current_user and getattr(current_user, "role", None) == "admin":
+    if (
+        allow_admin_fallback
+        and current_user
+        and getattr(current_user, "role", None) == "admin"
+    ):
         return
     abort(401)
 
@@ -161,7 +170,9 @@ def start_session():
 @jwt_required()
 def answer_question():
     payload = answer_schema.load(request.get_json() or {})
-    session = StudySession.query.filter_by(id=payload["session_id"], user_id=current_user.id).first_or_404()
+    session = StudySession.query.filter_by(
+        id=payload["session_id"], user_id=current_user.id
+    ).first_or_404()
     question = Question.query.filter_by(id=payload["question_id"]).first()
     if question is None:
         refreshed = session_service.refresh_assigned_questions(session)
@@ -193,10 +204,14 @@ def answer_question():
 @jwt_required()
 def fetch_explanation():
     payload = explanation_schema.load(request.get_json() or {})
-    session = StudySession.query.filter_by(id=payload["session_id"], user_id=current_user.id).first_or_404()
+    session = StudySession.query.filter_by(
+        id=payload["session_id"], user_id=current_user.id
+    ).first_or_404()
     log = (
         UserQuestionLog.query.filter_by(
-            study_session_id=session.id, question_id=payload["question_id"], user_id=current_user.id
+            study_session_id=session.id,
+            question_id=payload["question_id"],
+            user_id=current_user.id,
         )
         .order_by(UserQuestionLog.answered_at.desc())
         .first()
@@ -226,10 +241,14 @@ def fetch_explanation():
 @jwt_required()
 def clear_explanation():
     payload = explanation_schema.load(request.get_json() or {})
-    session = StudySession.query.filter_by(id=payload["session_id"], user_id=current_user.id).first_or_404()
+    session = StudySession.query.filter_by(
+        id=payload["session_id"], user_id=current_user.id
+    ).first_or_404()
     log = (
         UserQuestionLog.query.filter_by(
-            study_session_id=session.id, question_id=payload["question_id"], user_id=current_user.id
+            study_session_id=session.id,
+            question_id=payload["question_id"],
+            user_id=current_user.id,
         )
         .order_by(UserQuestionLog.answered_at.desc())
         .first()
@@ -249,7 +268,9 @@ def clear_explanation():
 @jwt_required()
 def end_session():
     session_id = request.get_json(force=True).get("session_id")
-    session = StudySession.query.filter_by(id=session_id, user_id=current_user.id).first_or_404()
+    session = StudySession.query.filter_by(
+        id=session_id, user_id=current_user.id
+    ).first_or_404()
     ended = session_service.end_session(session)
     return jsonify({"session": session_schema.dump(ended)})
 
@@ -260,7 +281,9 @@ def abort_session():
     payload = request.get_json(force=True) or {}
     session_id = payload.get("session_id")
     session = (
-        StudySession.query.filter_by(id=session_id, user_id=current_user.id, ended_at=None)
+        StudySession.query.filter_by(
+            id=session_id, user_id=current_user.id, ended_at=None
+        )
         .order_by(StudySession.started_at.desc())
         .first()
     )
@@ -304,7 +327,9 @@ def plan_regenerate():
     if guard:
         return guard
     plan = learning_plan_service.generate_daily_plan(current_user.id)
-    _, tasks = learning_plan_service.get_plan_with_tasks(current_user.id, plan.plan_date)
+    _, tasks = learning_plan_service.get_plan_with_tasks(
+        current_user.id, plan.plan_date
+    )
     return jsonify({"plan": plan.generated_detail, "tasks": tasks})
 
 
@@ -366,6 +391,7 @@ def progress_today():
     data = progress_service.get_today_progress(current_user.id)
     return jsonify({"progress": data})
 
+
 def _resolve_user_language(user):
     profile = getattr(user, "profile", None)
     preference = getattr(profile, "language_preference", None)
@@ -413,4 +439,3 @@ def get_preview_figure_image(figure_id: int):
         abort(404)
     cfg = _figure_signing_config()
     return _serve_figure_file(path, cfg["ttl_preview"])
-

@@ -5,9 +5,9 @@ Revises: 121dc0b3b0d8
 Create Date: 2025-12-07 12:00:00.000000
 
 """
-from alembic import op
-import sqlalchemy as sa
 
+import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "33b9f2f6fe1c"
@@ -27,7 +27,9 @@ def upgrade():
     if "purpose" not in columns:
         op.add_column(
             table,
-            sa.Column("purpose", sa.String(length=32), nullable=False, server_default="signup"),
+            sa.Column(
+                "purpose", sa.String(length=32), nullable=False, server_default="signup"
+            ),
         )
         if bind.dialect.name != "sqlite":
             op.alter_column(table, "purpose", server_default=None)
@@ -66,4 +68,3 @@ def downgrade():
 
     if "purpose" in columns:
         op.drop_column(table, "purpose")
-

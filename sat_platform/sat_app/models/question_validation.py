@@ -21,9 +21,9 @@ class QuestionValidationIssue(db.Model):
     source_id = db.Column(db.Integer, nullable=True, index=True)
     issue_code = db.Column(db.String(64), nullable=False)
     message = db.Column(db.String(512), nullable=False)
-    severity = db.Column(db.String(16), default="error", nullable=False)  # error|warning
+    severity = db.Column(
+        db.String(16), default="error", nullable=False
+    )  # error|warning
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
 
     question = db.relationship("Question", backref="validation_issues")
-
-

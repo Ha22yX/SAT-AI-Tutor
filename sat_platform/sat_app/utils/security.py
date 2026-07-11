@@ -25,4 +25,3 @@ def generate_access_token(user) -> str:
 
     claims: Dict[str, Any] = {"role": user.role}
     return create_access_token(identity=str(user.id), additional_claims=claims)
-

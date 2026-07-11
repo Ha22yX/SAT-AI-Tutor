@@ -2,63 +2,72 @@
 
 from __future__ import annotations
 
+import base64
 import json
+import re
+import shutil
 import string
 import time
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
-import base64
 from io import BytesIO
 from pathlib import Path
-from threading import Thread, Event, Lock
-from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy.exc import OperationalError
+from threading import Event, Lock, Thread
 from uuid import uuid4
-import shutil
 
 import pdfplumber
-import re
-from flask import Blueprint, Response, abort, current_app, jsonify, request, send_file, url_for, stream_with_context
+from flask import (
+    Blueprint,
+    Response,
+    abort,
+    current_app,
+    jsonify,
+    request,
+    send_file,
+    stream_with_context,
+    url_for,
+)
 from flask_jwt_extended import current_user, jwt_required
 from marshmallow import ValidationError
-from werkzeug.utils import secure_filename
-from sqlalchemy import func, or_, case, inspect
-from sqlalchemy.orm import joinedload
+from sqlalchemy import case, func, inspect, or_
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import joinedload, scoped_session, sessionmaker
 from sqlalchemy.orm.exc import ObjectDeletedError
+from werkzeug.utils import secure_filename
 
 from ..extensions import db
 from ..models import (
+    DailyMetric,
+    MembershipOrder,
+    Question,
     QuestionDraft,
     QuestionFigure,
     QuestionImportJob,
     QuestionSource,
     StudyPlanTask,
-    DailyMetric,
-    UserQuestionLog,
     User,
-    Question,
-    MembershipOrder,
+    UserQuestionLog,
 )
 from ..schemas import (
+    GeneralSettingsSchema,
     ManualParseSchema,
+    MembershipOrderDecisionSchema,
+    MembershipOrderSchema,
     QuestionCreateSchema,
     QuestionSchema,
     UserSchema,
-    GeneralSettingsSchema,
-    MembershipOrderSchema,
-    MembershipOrderDecisionSchema,
 )
 from ..services import (
-    question_service,
-    openai_log,
-    mail_service,
-    settings_service,
-    membership_service,
-    question_explanation_service,
     ai_paper_service,
+    mail_service,
+    membership_service,
+    openai_log,
+    question_explanation_service,
+    question_service,
+    settings_service,
 )
-from ..services.skill_taxonomy import canonicalize_tags, describe_skill
 from ..services.job_events import job_event_broker
+from ..services.skill_taxonomy import canonicalize_tags, describe_skill
 from ..tasks.question_tasks import process_job
 from ..utils import hash_password
 from ..utils.signed_urls import sign_payload
@@ -210,7 +219,7 @@ def _learning_snapshot(user_id: int) -> dict | None:
     stats = (
         db.session.query(
             func.count(UserQuestionLog.id),
-            func.sum(case((UserQuestionLog.is_correct == True, 1), else_=0)),  # noqa: E712
+            func.sum(case((UserQuestionLog.is_correct.is_(True), 1), else_=0)),
             func.avg(UserQuestionLog.time_spent_sec),
             func.max(UserQuestionLog.answered_at),
         )
@@ -221,7 +230,11 @@ def _learning_snapshot(user_id: int) -> dict | None:
     correct_questions = int(stats[1] or 0)
     avg_time = float(stats[2]) if stats[2] is not None else None
     last_active = stats[3].isoformat() if stats[3] else None
-    accuracy = round((correct_questions / total_questions) * 100, 1) if total_questions else None
+    accuracy = (
+        round((correct_questions / total_questions) * 100, 1)
+        if total_questions
+        else None
+    )
 
     plan_stats = (
         db.session.query(
@@ -257,8 +270,12 @@ def _learning_snapshot(user_id: int) -> dict | None:
         "plan_tasks_completed": plan_completed,
         "plan_tasks_total": plan_total,
         "active_plan": _serialize_plan_task(active_task) if active_task else None,
-        "predicted_score_rw": latest_metric.predicted_score_rw if latest_metric else None,
-        "predicted_score_math": latest_metric.predicted_score_math if latest_metric else None,
+        "predicted_score_rw": (
+            latest_metric.predicted_score_rw if latest_metric else None
+        ),
+        "predicted_score_math": (
+            latest_metric.predicted_score_math if latest_metric else None
+        ),
         "avg_difficulty": latest_metric.avg_difficulty if latest_metric else None,
     }
     if (
@@ -301,7 +318,13 @@ def _pagination_payload(pagination) -> dict:
     }
 
 
-def _create_question_source(*, filename: str, stored_path: Path, uploader_id: int, original_name: str | None = None) -> QuestionSource:
+def _create_question_source(
+    *,
+    filename: str,
+    stored_path: Path,
+    uploader_id: int,
+    original_name: str | None = None,
+) -> QuestionSource:
     source = QuestionSource(
         filename=filename,
         original_name=original_name or filename,
@@ -341,7 +364,14 @@ def _coerce_draft_payload(payload: dict | None) -> dict:
         for idx, choice in enumerate(choices):
             if not isinstance(choice, dict):
                 continue
-            label = (choice.get("label") or (labels[idx] if idx < len(labels) else str(idx))).strip().upper()
+            label = (
+                (
+                    choice.get("label")
+                    or (labels[idx] if idx < len(labels) else str(idx))
+                )
+                .strip()
+                .upper()
+            )
             text = choice.get("text") or choice.get("value") or ""
             if label:
                 mapped[label] = text
@@ -398,7 +428,10 @@ def _coerce_draft_payload(payload: dict | None) -> dict:
     elif isinstance(passage_payload, str):
         text = passage_payload.strip()
         if text:
-            normalized_passage = {"content_text": text, "metadata": {"source": "legacy"}}
+            normalized_passage = {
+                "content_text": text,
+                "metadata": {"source": "legacy"},
+            }
     if normalized_passage:
         data["passage"] = normalized_passage
     elif "passage" in data:
@@ -473,7 +506,9 @@ def _serialize_figure(figure: QuestionFigure) -> dict:
         "id": figure.id,
         "description": figure.description,
         "bbox": figure.bbox,
-        "url": url_for("admin_bp.get_figure_image", figure_id=figure.id, _external=False),
+        "url": url_for(
+            "admin_bp.get_figure_image", figure_id=figure.id, _external=False
+        ),
     }
 
 
@@ -487,7 +522,9 @@ def _extract_draft_page(draft: QuestionDraft) -> int:
         return 1
 
 
-def _render_pdf_page_base64(pdf_path: str | Path, page_number: int) -> tuple[str, int, int]:
+def _render_pdf_page_base64(
+    pdf_path: str | Path, page_number: int
+) -> tuple[str, int, int]:
     """Render a PDF page to PNG (base64). Falls back to non-pdfium if pdfium fails."""
 
     resolution = current_app.config.get("PDF_INGEST_RESOLUTION", 220)
@@ -514,7 +551,9 @@ def _render_pdf_page_base64(pdf_path: str | Path, page_number: int) -> tuple[str
         return _render(use_pdfium=None)  # default behavior
     except TypeError as exc:
         # Older pdfplumber without use_pdfium param
-        current_app.logger.warning("PDF render: pdfplumber does not accept use_pdfium: %s; retrying bare", exc)
+        current_app.logger.warning(
+            "PDF render: pdfplumber does not accept use_pdfium: %s; retrying bare", exc
+        )
         # Retry with plain open (no kwargs)
         with pdfplumber.open(path) as pdf:
             total_pages = len(pdf.pages)
@@ -528,15 +567,21 @@ def _render_pdf_page_base64(pdf_path: str | Path, page_number: int) -> tuple[str
             return f"data:image/png;base64,{encoded}", img.width, img.height
     except Exception as exc:
         # Retry without pdfium if pdfium chokes on the file
-        current_app.logger.warning("PDF render failed with pdfium: %s; retrying without pdfium", exc)
+        current_app.logger.warning(
+            "PDF render failed with pdfium: %s; retrying without pdfium", exc
+        )
         try:
             return _render(use_pdfium=False)
         except TypeError as exc2:
-            current_app.logger.warning("PDF render: pdfplumber does not accept use_pdfium (fallback): %s", exc2)
+            current_app.logger.warning(
+                "PDF render: pdfplumber does not accept use_pdfium (fallback): %s", exc2
+            )
             with pdfplumber.open(path) as pdf:
                 total_pages = len(pdf.pages)
                 if page_number < 1 or page_number > total_pages:
-                    raise ValueError(f"Page {page_number} out of range (1-{total_pages})")
+                    raise ValueError(
+                        f"Page {page_number} out of range (1-{total_pages})"
+                    )
                 page = pdf.pages[page_number - 1]
                 img = page.to_image(resolution=resolution).original.convert("RGB")
                 buffer = BytesIO()
@@ -552,7 +597,9 @@ def _get_draft_or_404(draft_id: int) -> QuestionDraft:
     return draft
 
 
-def _resolve_question_page_number(question: Question, requested_page: str | None) -> int | None:
+def _resolve_question_page_number(
+    question: Question, requested_page: str | None
+) -> int | None:
     if requested_page and requested_page.isdigit():
         return max(1, int(requested_page))
     if getattr(question, "source_page", None):
@@ -635,12 +682,10 @@ def _prune_stale_jobs(max_age_hours: int = 2, stall_minutes: int = 3):
     now = datetime.now(timezone.utc)
     stall_cutoff = now - timedelta(minutes=stall_minutes)
 
-    stalled_jobs = (
-        QuestionImportJob.query.filter(
-            QuestionImportJob.status == "processing",
-            QuestionImportJob.last_progress_at < stall_cutoff,
-        ).all()
-    )
+    stalled_jobs = QuestionImportJob.query.filter(
+        QuestionImportJob.status == "processing",
+        QuestionImportJob.last_progress_at < stall_cutoff,
+    ).all()
 
     if not stalled_jobs:
         return
@@ -650,9 +695,7 @@ def _prune_stale_jobs(max_age_hours: int = 2, stall_minutes: int = 3):
         if last_progress and last_progress >= stall_cutoff:
             continue
         job.status = "failed"
-        job.status_message = (
-            "Paused due to no progress for an extended period. Please resume to continue parsing."
-        )
+        job.status_message = "Paused due to no progress for an extended period. Please resume to continue parsing."
         job.last_progress_at = now
         db.session.add(job)
         with db.session.no_autoflush:
@@ -801,9 +844,8 @@ def list_membership_orders_admin():
     page = int(request.args.get("page", 1))
     per_page = min(int(request.args.get("per_page", 20)), 100)
     status = request.args.get("status")
-    query = (
-        MembershipOrder.query.options(joinedload(MembershipOrder.user))
-        .order_by(MembershipOrder.created_at.desc())
+    query = MembershipOrder.query.options(joinedload(MembershipOrder.user)).order_by(
+        MembershipOrder.created_at.desc()
     )
     if status and status.lower() not in {"all", "any"}:
         query = query.filter(MembershipOrder.status == status.lower())
@@ -830,7 +872,12 @@ def decide_membership_order(order_id: int):
         abort(404)
     if order.status != "pending":
         return (
-            jsonify({"message": "Order already processed", "order": membership_order_schema.dump(order)}),
+            jsonify(
+                {
+                    "message": "Order already processed",
+                    "order": membership_order_schema.dump(order),
+                }
+            ),
             HTTPStatus.BAD_REQUEST,
         )
     payload = membership_order_decision_schema.load(request.get_json() or {})
@@ -839,7 +886,10 @@ def decide_membership_order(order_id: int):
     order.reviewed_at = datetime.now(timezone.utc)
     if payload["action"] == "approve":
         membership = membership_service.apply_plan(
-            order.user, order.plan, operator_id=current_user.id, note=f"order:{order.id}"
+            order.user,
+            order.plan,
+            operator_id=current_user.id,
+            note=f"order:{order.id}",
         )
         order.status = "approved"
         db.session.add(order)
@@ -918,9 +968,13 @@ def create_ai_paper():
     if not require_admin():
         return jsonify({"message": "Forbidden"}), HTTPStatus.FORBIDDEN
     payload = request.get_json(silent=True) or {}
-    name = payload.get("name") or datetime.utcnow().strftime("AI Readiness Set %Y-%m-%d %H:%M")
+    name = payload.get("name") or datetime.utcnow().strftime(
+        "AI Readiness Set %Y-%m-%d %H:%M"
+    )
     config = payload.get("config") or {}
-    job = ai_paper_service.create_ai_paper_job(name=name, user=current_user, config=config)
+    job = ai_paper_service.create_ai_paper_job(
+        name=name, user=current_user, config=config
+    )
     return jsonify(_serialize_ai_paper_job(job)), HTTPStatus.CREATED
 
 
@@ -1016,14 +1070,23 @@ def get_question_figure_source(question_id: int):
     question = question_service.get_question(question_id)
     source = question.source
     if not source or not source.stored_path:
-        return jsonify({"message": "Question is not linked to a PDF source."}), HTTPStatus.BAD_REQUEST
+        return (
+            jsonify({"message": "Question is not linked to a PDF source."}),
+            HTTPStatus.BAD_REQUEST,
+        )
     page = _resolve_question_page_number(question, request.args.get("page"))
     if not page:
-        return jsonify({"message": "No page number available for this question."}), HTTPStatus.BAD_REQUEST
+        return (
+            jsonify({"message": "No page number available for this question."}),
+            HTTPStatus.BAD_REQUEST,
+        )
     try:
         image, width, height = _render_pdf_page_base64(source.stored_path, page)
     except Exception as exc:  # pragma: no cover - defensive
-        return jsonify({"message": f"Unable to render page {page}: {exc}"}), HTTPStatus.BAD_REQUEST
+        return (
+            jsonify({"message": f"Unable to render page {page}: {exc}"}),
+            HTTPStatus.BAD_REQUEST,
+        )
     return jsonify({"page": page, "image": image, "width": width, "height": height})
 
 
@@ -1050,7 +1113,10 @@ def upload_question_figure(question_id: int):
         return jsonify({"message": "Forbidden"}), HTTPStatus.FORBIDDEN
     question = question_service.get_question(question_id)
     if not question.source_id:
-        return jsonify({"message": "Question must be linked to a PDF source first."}), HTTPStatus.BAD_REQUEST
+        return (
+            jsonify({"message": "Question must be linked to a PDF source first."}),
+            HTTPStatus.BAD_REQUEST,
+        )
     file = request.files.get("image")
     if file is None:
         return jsonify({"message": "Image file is required."}), HTTPStatus.BAD_REQUEST
@@ -1064,7 +1130,9 @@ def upload_question_figure(question_id: int):
             return jsonify({"message": "Invalid bbox payload."}), HTTPStatus.BAD_REQUEST
     target_dir = _figure_root() / f"question_{question.id}"
     target_dir.mkdir(parents=True, exist_ok=True)
-    filename = secure_filename(file.filename or f"question-{question.id}-{uuid4().hex}.png")
+    filename = secure_filename(
+        file.filename or f"question-{question.id}-{uuid4().hex}.png"
+    )
     path = target_dir / filename
     file.save(path)
     existing_query = getattr(question, "figures", None)
@@ -1072,7 +1140,12 @@ def upload_question_figure(question_id: int):
         for existing in existing_query.all():
             _delete_figure_file(existing)
             db.session.delete(existing)
-    figure = QuestionFigure(question_id=question.id, image_path=str(path), description=description, bbox=bbox)
+    figure = QuestionFigure(
+        question_id=question.id,
+        image_path=str(path),
+        description=description,
+        bbox=bbox,
+    )
     question.has_figure = True
     db.session.add(figure)
     db.session.add(question)
@@ -1086,7 +1159,9 @@ def delete_question_figure(question_id: int, figure_id: int):
     if not require_admin():
         return jsonify({"message": "Forbidden"}), HTTPStatus.FORBIDDEN
     question = question_service.get_question(question_id)
-    figure = QuestionFigure.query.filter_by(id=figure_id, question_id=question.id).first()
+    figure = QuestionFigure.query.filter_by(
+        id=figure_id, question_id=question.id
+    ).first()
     if not figure:
         abort(404)
     _delete_figure_file(figure)
@@ -1159,7 +1234,11 @@ def list_question_categories():
                     "section_counts": {"RW": 0, "Math": 0},
                 },
             )
-            target_section = "RW" if (descriptor.get("domain") or "").startswith("Reading") else "Math"
+            target_section = (
+                "RW"
+                if (descriptor.get("domain") or "").startswith("Reading")
+                else "Math"
+            )
             if section and section.upper() in {"RW", "MATH"}:
                 target_section = section.upper()
             entry["question_count"] += 1
@@ -1182,7 +1261,10 @@ def bulk_delete_questions():
     payload = request.get_json() or {}
     ids = payload.get("ids") or payload.get("question_ids")
     if not isinstance(ids, list) or not ids:
-        return jsonify({"message": "Provide a non-empty list of ids"}), HTTPStatus.BAD_REQUEST
+        return (
+            jsonify({"message": "Provide a non-empty list of ids"}),
+            HTTPStatus.BAD_REQUEST,
+        )
     deleted: list[int] = []
     for raw_id in ids:
         try:
@@ -1251,7 +1333,16 @@ def force_delete_source(source_id: int):
     # Clean up source and commit
     question_service.cleanup_source_if_unused(source_id)
     db.session.commit()
-    return jsonify({"message": "Force deleted source", "question_deleted": len(questions), "draft_deleted": len(drafts)}), HTTPStatus.OK
+    return (
+        jsonify(
+            {
+                "message": "Force deleted source",
+                "question_deleted": len(questions),
+                "draft_deleted": len(drafts),
+            }
+        ),
+        HTTPStatus.OK,
+    )
 
 
 @admin_bp.post("/questions/<int:question_id>/explanations/clear")
@@ -1265,7 +1356,10 @@ def clear_question_explanations(question_id: int):
         {"explanation": None, "viewed_explanation": False}, synchronize_session=False
     )
     db.session.commit()
-    return jsonify({"message": "Cleared cached explanations", "deleted": cache_deleted}), HTTPStatus.OK
+    return (
+        jsonify({"message": "Cleared cached explanations", "deleted": cache_deleted}),
+        HTTPStatus.OK,
+    )
 
 
 @admin_bp.get("/sources")
@@ -1285,7 +1379,9 @@ def list_sources_admin():
     items = []
     for source in pagination.items:
         data = _serialize_source(source)
-        data["created_at"] = source.created_at.isoformat() if source.created_at else None
+        data["created_at"] = (
+            source.created_at.isoformat() if source.created_at else None
+        )
         data["question_count"] = source.questions.count()
         items.append(data)
     return jsonify({"items": items, "pagination": _pagination_payload(pagination)})
@@ -1301,13 +1397,17 @@ def get_source_detail(source_id: int):
         abort(404)
     page = int(request.args.get("page", 1))
     per_page = int(request.args.get("per_page", 20))
-    questions_query = Question.query.filter_by(source_id=source.id).order_by(Question.id.asc())
+    questions_query = Question.query.filter_by(source_id=source.id).order_by(
+        Question.id.asc()
+    )
     pagination = _paginate(questions_query, page, per_page)
     return jsonify(
         {
             "source": {
                 **(_serialize_source(source) or {}),
-                "created_at": source.created_at.isoformat() if source.created_at else None,
+                "created_at": (
+                    source.created_at.isoformat() if source.created_at else None
+                ),
                 "question_count": source.questions.count(),
             },
             "questions": [_serialize_question(q) for q in pagination.items],
@@ -1331,7 +1431,9 @@ def update_general_settings():
     if not require_admin():
         return jsonify({"message": "Forbidden"}), HTTPStatus.FORBIDDEN
     payload = general_settings_schema.load(request.get_json() or {})
-    settings_service.set_setting(SUGGESTION_EMAIL_KEY, payload.get(SUGGESTION_EMAIL_KEY))
+    settings_service.set_setting(
+        SUGGESTION_EMAIL_KEY, payload.get(SUGGESTION_EMAIL_KEY)
+    )
     return jsonify({"settings": payload})
 
 
@@ -1356,7 +1458,9 @@ def _run_job_async(app, job_id: int) -> None:
             try:
                 _maybe_start_pending(app)
             except Exception:
-                current_app.logger.exception("Failed to dispatch next pending import job")
+                current_app.logger.exception(
+                    "Failed to dispatch next pending import job"
+                )
 
     thread = Thread(target=_target, daemon=True)
     with _IMPORT_LOCK:
@@ -1445,10 +1549,14 @@ def ingest_pdf_questions():
     if not file.filename:
         return jsonify({"message": "Filename missing"}), HTTPStatus.BAD_REQUEST
     filename = secure_filename(file.filename)
-    force_raw = (request.form.get("force") or request.args.get("force") or "").strip().lower()
+    force_raw = (
+        (request.form.get("force") or request.args.get("force") or "").strip().lower()
+    )
     force_replace = force_raw in {"1", "true", "yes", "force", "on"}
     existing_source = (
-        QuestionSource.query.filter(func.lower(QuestionSource.filename) == filename.lower())
+        QuestionSource.query.filter(
+            func.lower(QuestionSource.filename) == filename.lower()
+        )
         .order_by(QuestionSource.created_at.desc())
         .first()
     )
@@ -1519,7 +1627,12 @@ def list_imports():
         .limit(20)
         .all()
     )
-    drafts = [draft.serialize() for job in jobs for draft in job.drafts if _is_visible_review_draft(draft)]
+    drafts = [
+        draft.serialize()
+        for job in jobs
+        for draft in job.drafts
+        if _is_visible_review_draft(draft)
+    ]
     return jsonify(
         {
             "jobs": [_serialize_job(job) for job in jobs],
@@ -1536,7 +1649,10 @@ def get_draft_figure_source(draft_id: int):
     draft = _get_draft_or_404(draft_id)
     job = draft.job
     if not job or not job.source_path:
-        return jsonify({"message": "Original upload not available"}), HTTPStatus.BAD_REQUEST
+        return (
+            jsonify({"message": "Original upload not available"}),
+            HTTPStatus.BAD_REQUEST,
+        )
     requested_page = request.args.get("page")
     page = (
         int(requested_page)
@@ -1546,7 +1662,10 @@ def get_draft_figure_source(draft_id: int):
     try:
         image, width, height = _render_pdf_page_base64(job.source_path, page)
     except Exception as exc:  # pragma: no cover - defensive
-        return jsonify({"message": f"Unable to render page {page}: {exc}"}), HTTPStatus.BAD_REQUEST
+        return (
+            jsonify({"message": f"Unable to render page {page}: {exc}"}),
+            HTTPStatus.BAD_REQUEST,
+        )
     return jsonify({"page": page, "image": image, "width": width, "height": height})
 
 
@@ -1570,7 +1689,9 @@ def preview_draft_question(draft_id: int):
     raw_choices = payload.get("choices") or {}
     answer_schema = payload.get("answer_schema")
     # Preserve explicit question_type when present; otherwise infer fill if no choices but an answer_schema exists.
-    inferred_qtype = payload.get("question_type") or ("fill" if not raw_choices and answer_schema else "choice")
+    inferred_qtype = payload.get("question_type") or (
+        "fill" if not raw_choices and answer_schema else "choice"
+    )
 
     question_payload: dict = {
         "question_id": -draft.id,  # negative id to avoid clashing with real questions
@@ -1628,9 +1749,14 @@ def upload_draft_figure(draft_id: int):
     kind = (request.form.get("kind") or "main").strip().lower()
     # 允许“choice”类型的图表，用于选项是图片的题目
     if not draft.payload.get("has_figure") and kind != "choice":
-        return jsonify(
-            {"message": "This draft does not require a figure. For option images, send kind=choice."}
-        ), HTTPStatus.BAD_REQUEST
+        return (
+            jsonify(
+                {
+                    "message": "This draft does not require a figure. For option images, send kind=choice."
+                }
+            ),
+            HTTPStatus.BAD_REQUEST,
+        )
     file = request.files.get("image")
     if file is None:
         return jsonify({"message": "Image file is required."}), HTTPStatus.BAD_REQUEST
@@ -1680,19 +1806,29 @@ def upload_draft_figure(draft_id: int):
             _delete_figure_file(existing)
             db.session.delete(existing)
 
-        figure = QuestionFigure(draft_id=draft.id, image_path=str(path), description=description, bbox=bbox)
+        figure = QuestionFigure(
+            draft_id=draft.id, image_path=str(path), description=description, bbox=bbox
+        )
         db.session.add(figure)
         # Ensure PK is assigned before serialization
         db.session.flush()
         _commit_with_retry()
     except OperationalError as exc:
         db.session.rollback()
-        current_app.logger.warning("Failed to save draft figure due to lock", exc_info=exc)
-        return jsonify({"message": "Database is locked, please retry."}), HTTPStatus.TOO_MANY_REQUESTS
+        current_app.logger.warning(
+            "Failed to save draft figure due to lock", exc_info=exc
+        )
+        return (
+            jsonify({"message": "Database is locked, please retry."}),
+            HTTPStatus.TOO_MANY_REQUESTS,
+        )
     except Exception:
         db.session.rollback()
         current_app.logger.exception("Failed to save draft figure")
-        return jsonify({"message": "Failed to save figure."}), HTTPStatus.INTERNAL_SERVER_ERROR
+        return (
+            jsonify({"message": "Failed to save figure."}),
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+        )
 
     job_event_broker.publish(
         {
@@ -1760,8 +1896,7 @@ def send_test_email():
 
     subject = (payload.get("subject") or "SAT AI Tutor test email").strip()
     message = (
-        payload.get("message")
-        or "This is a test email generated by SAT AI Tutor."
+        payload.get("message") or "This is a test email generated by SAT AI Tutor."
     )
     html = payload.get("html") or f"<p>{message}</p>"
 
@@ -1800,7 +1935,10 @@ def import_events():
             payload = [job.serialize() for job in jobs]
             yield f"data: {json.dumps({'type': 'snapshot', 'payload': payload})}\n\n"
             drafts = [
-                draft.serialize() for job in jobs for draft in job.drafts if _is_visible_review_draft(draft)
+                draft.serialize()
+                for job in jobs
+                for draft in job.drafts
+                if _is_visible_review_draft(draft)
             ]
             yield f"data: {json.dumps({'type': 'draft_snapshot', 'payload': drafts})}\n\n"
         finally:
@@ -1827,7 +1965,9 @@ def delete_draft(draft_id: int):
     if source_id:
         question_service.cleanup_source_if_unused(source_id)
     db.session.commit()
-    job_event_broker.publish({"type": "draft_removed", "payload": {"id": draft_id, "job_id": draft.job_id}})
+    job_event_broker.publish(
+        {"type": "draft_removed", "payload": {"id": draft_id, "job_id": draft.job_id}}
+    )
     return "", HTTPStatus.NO_CONTENT
 
 
@@ -1866,13 +2006,22 @@ def publish_draft(draft_id: int):
         choice_keys: list[str] = []
         raw_choice_keys = payload.get("choice_figure_keys") or []
         if isinstance(raw_choice_keys, list):
-            choice_keys = [str(k).strip().upper() for k in raw_choice_keys if str(k).strip()]
+            choice_keys = [
+                str(k).strip().upper() for k in raw_choice_keys if str(k).strip()
+            ]
         # Validate figure availability
         main_requires_figure = bool(payload.get("has_figure"))
         choice_requires_figure = bool(choice_keys)
-        if main_requires_figure and draft.figures.filter(
-            or_(QuestionFigure.description.is_(None), ~QuestionFigure.description.ilike("%choice%"))
-        ).count() == 0:
+        if (
+            main_requires_figure
+            and draft.figures.filter(
+                or_(
+                    QuestionFigure.description.is_(None),
+                    ~QuestionFigure.description.ilike("%choice%"),
+                )
+            ).count()
+            == 0
+        ):
             return (
                 jsonify(
                     {
@@ -1886,7 +2035,10 @@ def publish_draft(draft_id: int):
             missing = []
             for key in choice_keys:
                 exists = (
-                    draft.figures.filter(QuestionFigure.description.ilike(f"%choice {key.lower()}%")).count() > 0
+                    draft.figures.filter(
+                        QuestionFigure.description.ilike(f"%choice {key.lower()}%")
+                    ).count()
+                    > 0
                 )
                 if not exists:
                     missing.append(key)
@@ -1909,7 +2061,9 @@ def publish_draft(draft_id: int):
         if draft.source_id and not question_payload.get("source_id"):
             question_payload["source_id"] = draft.source_id
         question = question_service.create_question(question_payload, commit=False)
-        metadata_json = question.metadata_json if isinstance(question.metadata_json, dict) else {}
+        metadata_json = (
+            question.metadata_json if isinstance(question.metadata_json, dict) else {}
+        )
         metadata_json["coarse_draft_link"] = {
             "draft_id": draft.id,
             "job_id": draft.job_id,
@@ -1924,14 +2078,22 @@ def publish_draft(draft_id: int):
         stored_langs: set[str] = set()
         post_publish_langs: list[str] = []
         if precomputed_explanations:
-            stored_records = question_explanation_service.store_precomputed_explanations(
-                question, precomputed_explanations
+            stored_records = (
+                question_explanation_service.store_precomputed_explanations(
+                    question, precomputed_explanations
+                )
             )
             stored_langs = set(stored_records.keys())
         missing_langs = [
-            lang for lang in question_explanation_service.DEFAULT_LANGUAGES if lang not in stored_langs
+            lang
+            for lang in question_explanation_service.DEFAULT_LANGUAGES
+            if lang not in stored_langs
         ]
-        should_generate_now = not requires_figure
+        has_ai_key = bool(
+            current_app.config.get("OPENAI_API_KEY")
+            or current_app.config.get("AI_API_KEY")
+        )
+        should_generate_now = has_ai_key and not requires_figure
         if should_generate_now:
             try:
                 if missing_langs:
@@ -1945,20 +2107,12 @@ def publish_draft(draft_id: int):
                     "Failed to pre-generate explanations for question",
                     extra={"question_id": question.id, "missing_langs": missing_langs},
                 )
-        else:
+        elif has_ai_key:
             post_publish_langs = missing_langs
         # Ensure all pending state (question/figures) is flushed before updating draft link.
         db.session.flush()
-        draft_payload = draft.payload if isinstance(draft.payload, dict) else {}
-        draft_meta = draft_payload.get("metadata")
-        if not isinstance(draft_meta, dict):
-            draft_meta = {}
-        draft_meta["published_question_id"] = question.id
-        draft_meta["published_at"] = datetime.now(timezone.utc).isoformat()
-        draft_payload["metadata"] = draft_meta
-        draft.payload = draft_payload
-        draft.is_verified = True
-        db.session.add(draft)
+        removed_draft_payload = {"id": draft.id, "job_id": draft.job_id}
+        db.session.delete(draft)
         try:
             _commit_with_retry()
         except ObjectDeletedError:
@@ -1966,8 +2120,12 @@ def publish_draft(draft_id: int):
             abort(404)
         if post_publish_langs:
             _spawn_background_explanations(question.id, post_publish_langs)
-        # Keep draft in DB for coarse traceability, but remove from review queue after publish.
-        job_event_broker.publish({"type": "draft_removed", "payload": {"id": draft.id, "job_id": draft.job_id}})
+        job_event_broker.publish(
+            {
+                "type": "draft_removed",
+                "payload": removed_draft_payload,
+            }
+        )
         return jsonify({"question": question_schema.dump(question)}), HTTPStatus.CREATED
 
     return _run_with_lock_retry(_publish)
@@ -2057,4 +2215,3 @@ def resume_import(job_id: int):
     _dispatch_job(job)
     job_event_broker.publish({"type": "job", "payload": job.serialize()})
     return jsonify({"job": job.serialize()}), HTTPStatus.ACCEPTED
-

@@ -6,13 +6,13 @@ from .admin_bp import admin_bp
 from .ai_bp import ai_bp
 from .analytics_bp import analytics_bp
 from .auth_bp import auth_bp
+from .diagnostic_bp import diagnostic_bp
 from .learning_bp import learning_bp
+from .membership_bp import membership_bp
+from .metrics_bp import metrics_bp
 from .question_bp import question_bp
 from .student_bp import student_bp
-from .metrics_bp import metrics_bp
-from .diagnostic_bp import diagnostic_bp
 from .support_bp import support_bp
-from .membership_bp import membership_bp
 
 BLUEPRINTS = (
     (auth_bp, "/api/auth"),
@@ -42,4 +42,3 @@ __all__ = [
     "metrics_bp",
     "membership_bp",
 ]
-

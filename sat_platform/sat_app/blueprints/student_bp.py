@@ -10,4 +10,3 @@ student_bp = Blueprint("student_bp", __name__)
 @student_bp.get("/ping")
 def ping():
     return jsonify({"module": "student", "status": "ok"})
-

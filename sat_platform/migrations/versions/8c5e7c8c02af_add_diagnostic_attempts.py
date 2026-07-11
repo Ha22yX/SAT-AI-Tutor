@@ -5,9 +5,8 @@ Revises: 07a0f2b4a4d4
 Create Date: 2025-12-05 11:15:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "8c5e7c8c02af"
@@ -37,9 +36,15 @@ def upgrade():
         op.create_table(
             "diagnostic_attempts",
             sa.Column("id", sa.Integer(), primary_key=True),
-            sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
-            sa.Column("status", sa.String(length=32), nullable=False, server_default="pending"),
-            sa.Column("total_questions", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column(
+                "user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False
+            ),
+            sa.Column(
+                "status", sa.String(length=32), nullable=False, server_default="pending"
+            ),
+            sa.Column(
+                "total_questions", sa.Integer(), nullable=False, server_default="0"
+            ),
             sa.Column(
                 "started_at",
                 sa.DateTime(timezone=True),
@@ -97,17 +102,22 @@ def downgrade():
     bind = op.get_bind()
     inspector = sa.inspect(bind)
 
-    if _has_index(inspector, "study_sessions", "ix_study_sessions_diagnostic_attempt_id"):
-        op.drop_index("ix_study_sessions_diagnostic_attempt_id", table_name="study_sessions")
+    if _has_index(
+        inspector, "study_sessions", "ix_study_sessions_diagnostic_attempt_id"
+    ):
+        op.drop_index(
+            "ix_study_sessions_diagnostic_attempt_id", table_name="study_sessions"
+        )
     if _has_column(inspector, "study_sessions", "diagnostic_attempt_id"):
         op.drop_column("study_sessions", "diagnostic_attempt_id")
     if _has_column(inspector, "study_sessions", "session_type"):
         op.drop_column("study_sessions", "session_type")
 
     if _has_table(inspector, "diagnostic_attempts"):
-        if _has_index(inspector, "diagnostic_attempts", "ix_diagnostic_attempts_user_status"):
+        if _has_index(
+            inspector, "diagnostic_attempts", "ix_diagnostic_attempts_user_status"
+        ):
             op.drop_index(
                 "ix_diagnostic_attempts_user_status", table_name="diagnostic_attempts"
             )
         op.drop_table("diagnostic_attempts")
-

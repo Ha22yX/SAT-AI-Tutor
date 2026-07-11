@@ -4,19 +4,25 @@ from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
 from datetime import datetime, timezone
+from inspect import Parameter, signature
+from pathlib import Path
 
+from flask import current_app
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm.exc import ObjectDeletedError
-from flask import current_app
 
 from ..extensions import db
-from ..models import QuestionImportJob, QuestionDraft, Question
+from ..models import Question, QuestionDraft, QuestionImportJob
 from ..schemas.question_schema import QuestionCreateSchema
+from ..services import (
+    ai_question_parser,
+    pdf_ingest_service,
+    question_explanation_service,
+    question_service,
+)
 from ..services.job_events import job_event_broker
 from ..utils.file_parser import parse_file
-from ..services import ai_question_parser, pdf_ingest_service, question_service, question_explanation_service
 
 
 def _flush_with_retry(attempts: int = 5, base_delay: float = 0.2) -> None:
@@ -35,6 +41,21 @@ def _flush_with_retry(attempts: int = 5, base_delay: float = 0.2) -> None:
 question_create_schema = QuestionCreateSchema()
 
 
+def _call_pdf_ingest(source_path: str | Path, **kwargs):
+    ingest_fn = pdf_ingest_service.ingest_pdf_document
+    try:
+        params = signature(ingest_fn).parameters
+    except (TypeError, ValueError):
+        return ingest_fn(source_path, **kwargs)
+    accepts_extra_kwargs = any(
+        param.kind == Parameter.VAR_KEYWORD for param in params.values()
+    )
+    if accepts_extra_kwargs:
+        return ingest_fn(source_path, **kwargs)
+    supported_kwargs = {key: value for key, value in kwargs.items() if key in params}
+    return ingest_fn(source_path, **supported_kwargs)
+
+
 def _save_draft(job: QuestionImportJob, payload: dict) -> QuestionDraft:
     """Upsert draft by coarse_uid to avoid duplicates on resume."""
     coarse_uid = payload.get("coarse_uid")
@@ -46,7 +67,9 @@ def _save_draft(job: QuestionImportJob, payload: dict) -> QuestionDraft:
                     draft.updated_at = datetime.now(timezone.utc)
                     db.session.add(draft)
                     _flush_with_retry()
-                    job_event_broker.publish({"type": "draft", "payload": draft.serialize()})
+                    job_event_broker.publish(
+                        {"type": "draft", "payload": draft.serialize()}
+                    )
                     return draft
             except Exception:
                 continue
@@ -93,7 +116,9 @@ def _is_auto_publish_candidate(payload: dict) -> bool:
     return True
 
 
-def _auto_publish_draft_if_eligible(job: QuestionImportJob, draft: QuestionDraft) -> bool:
+def _auto_publish_draft_if_eligible(
+    job: QuestionImportJob, draft: QuestionDraft
+) -> bool:
     payload = draft.payload if isinstance(draft.payload, dict) else {}
     if _extract_published_question_id(draft):
         return True
@@ -112,7 +137,9 @@ def _auto_publish_draft_if_eligible(job: QuestionImportJob, draft: QuestionDraft
         if draft.source_id and not question_payload.get("source_id"):
             question_payload["source_id"] = draft.source_id
         question = question_service.create_question(question_payload, commit=False)
-        qmeta = question.metadata_json if isinstance(question.metadata_json, dict) else {}
+        qmeta = (
+            question.metadata_json if isinstance(question.metadata_json, dict) else {}
+        )
         qmeta["coarse_draft_link"] = {
             "draft_id": draft.id,
             "job_id": draft.job_id,
@@ -120,7 +147,9 @@ def _auto_publish_draft_if_eligible(job: QuestionImportJob, draft: QuestionDraft
         }
         question.metadata_json = qmeta
         if precomputed_explanations:
-            question_explanation_service.store_precomputed_explanations(question, precomputed_explanations)
+            question_explanation_service.store_precomputed_explanations(
+                question, precomputed_explanations
+            )
         draft_meta = payload.get("metadata")
         if not isinstance(draft_meta, dict):
             draft_meta = {}
@@ -131,11 +160,18 @@ def _auto_publish_draft_if_eligible(job: QuestionImportJob, draft: QuestionDraft
         draft.is_verified = True
         db.session.add(draft)
         _commit_with_retry()
-        job_event_broker.publish({"type": "draft_removed", "payload": {"id": draft.id, "job_id": draft.job_id}})
+        job_event_broker.publish(
+            {
+                "type": "draft_removed",
+                "payload": {"id": draft.id, "job_id": draft.job_id},
+            }
+        )
         return True
     except Exception as exc:
         db.session.rollback()
-        current_app.logger.warning("Auto-publish skipped for draft %s: %s", getattr(draft, "id", "?"), exc)
+        current_app.logger.warning(
+            "Auto-publish skipped for draft %s: %s", getattr(draft, "id", "?"), exc
+        )
         return False
 
 
@@ -180,13 +216,21 @@ def process_job(job_id: int, cancel_event=None) -> QuestionImportJob:
     draft_count = len(existing_drafts)
     # Count already published questions tied to the same source.
     published_count = (
-        db.session.query(Question).filter(Question.source_id == job.source_id).count() if job.source_id else 0
+        db.session.query(Question).filter(Question.source_id == job.source_id).count()
+        if job.source_id
+        else 0
     )
     # Baseline for display (Draft Review) vs. skip baseline (include already published)
-    display_count = draft_count  # what UI should show as "Normalized" (drafts available to review)
-    skip_baseline = draft_count + published_count  # how many items should be skipped on resume
+    display_count = (
+        draft_count  # what UI should show as "Normalized" (drafts available to review)
+    )
+    skip_baseline = (
+        draft_count + published_count
+    )  # how many items should be skipped on resume
     max_page_done = job.processed_pages or 0
-    source_total_pages = (getattr(job, "source", None) or getattr(job, "source_obj", None))
+    source_total_pages = getattr(job, "source", None) or getattr(
+        job, "source_obj", None
+    )
     try:
         source_total_pages = source_total_pages.total_pages if source_total_pages else 0
     except Exception:
@@ -223,7 +267,9 @@ def process_job(job_id: int, cancel_event=None) -> QuestionImportJob:
         except Exception:
             max_page_from_published = 0
 
-    max_page_done = max(max_page_done, max_page_from_drafts, max_page_from_published, coarse_max_page)
+    max_page_done = max(
+        max_page_done, max_page_from_drafts, max_page_from_published, coarse_max_page
+    )
     # If coarse pages are already extracted up to processed_pages, skip page extraction on resume.
     # Be tolerant of cases where processed_pages wasn't persisted but coarse cache or total_pages hint exists.
     pages_done = False
@@ -241,8 +287,12 @@ def process_job(job_id: int, cancel_event=None) -> QuestionImportJob:
         else:
             coarse_items_for_ingest = coarse_cache[skip_baseline:]
     # If we trim the coarse cache up front, we no longer need to skip inside ingest.
-    skip_normalized = 0 if coarse_items_for_ingest is not coarse_cache else skip_baseline
-    full_total_pages = max(job.total_pages or 0, source_total_pages or 0, coarse_max_page, max_page_done)
+    skip_normalized = (
+        0 if coarse_items_for_ingest is not coarse_cache else skip_baseline
+    )
+    full_total_pages = max(
+        job.total_pages or 0, source_total_pages or 0, coarse_max_page, max_page_done
+    )
 
     job.status = "processing"
     job.error_message = None
@@ -253,7 +303,11 @@ def process_job(job_id: int, cancel_event=None) -> QuestionImportJob:
     job.status_message = (
         "Initializing ingestion"
         if max_page_done == 0 and not pages_done
-        else ("Resuming normalization (pages already extracted)" if pages_done else f"Resuming from page {max_page_done + 1}")
+        else (
+            "Resuming normalization (pages already extracted)"
+            if pages_done
+            else f"Resuming from page {max_page_done + 1}"
+        )
     )
     job.last_progress_at = datetime.now(timezone.utc)
     _commit_with_retry()
@@ -262,17 +316,26 @@ def process_job(job_id: int, cancel_event=None) -> QuestionImportJob:
         if job.ingest_strategy == "vision_pdf":
 
             def _progress(
-                page_idx: int, total_pages: int, normalized_count: int, message: str | None = None
+                page_idx: int,
+                total_pages: int,
+                normalized_count: int,
+                message: str | None = None,
             ) -> None:
                 # if job row was deleted (e.g., cancel/import delete), stop gracefully
                 if not _job_exists(job_id_int):
-                    raise ObjectDeletedError(f"Job {job_id_int} no longer exists; aborting ingest.", None, None)
+                    raise ObjectDeletedError(
+                        f"Job {job_id_int} no longer exists; aborting ingest.",
+                        None,
+                        None,
+                    )
                 job.processed_pages = page_idx
                 job.total_pages = total_pages
                 if job.source and total_pages:
                     job.source.total_pages = total_pages
                 # Keep the visible normalized count in sync with the actual drafts present.
-                job.parsed_questions = db.session.query(QuestionDraft).filter_by(job_id=job_id_int).count()
+                job.parsed_questions = (
+                    db.session.query(QuestionDraft).filter_by(job_id=job_id_int).count()
+                )
                 job.current_page = page_idx
                 if message:
                     job.status_message = message
@@ -282,27 +345,39 @@ def process_job(job_id: int, cancel_event=None) -> QuestionImportJob:
 
             def _persist_coarse(items: list[dict]) -> None:
                 if not _job_exists(job_id_int):
-                    raise ObjectDeletedError(f"Job {job_id_int} no longer exists; aborting ingest.", None, None)
+                    raise ObjectDeletedError(
+                        f"Job {job_id_int} no longer exists; aborting ingest.",
+                        None,
+                        None,
+                    )
                 job.payload_json = items
                 _commit_with_retry()
 
             def _on_question(payload: dict) -> None:
                 if not _job_exists(job_id_int):
-                    raise ObjectDeletedError(f"Job {job_id_int} no longer exists; aborting ingest.", None, None)
+                    raise ObjectDeletedError(
+                        f"Job {job_id_int} no longer exists; aborting ingest.",
+                        None,
+                        None,
+                    )
                 draft = _save_draft(job, payload)
                 _auto_publish_draft_if_eligible(job, draft)
                 # Recompute from DB to avoid drift if any draft was removed/added outside the session.
-                job.parsed_questions = db.session.query(QuestionDraft).filter_by(job_id=job_id_int).count()
+                job.parsed_questions = (
+                    db.session.query(QuestionDraft).filter_by(job_id=job_id_int).count()
+                )
                 _commit_with_retry()
 
-            pdf_ingest_service.ingest_pdf_document(
+            _call_pdf_ingest(
                 job.source_path,
                 progress_cb=_progress,
                 question_cb=_on_question,
                 job_id=job_id_int,
                 cancel_event=cancel_event,
                 # If pages already extracted, skip page loop by setting end_page < start_page
-                start_page=(max_page_done + 1) if not pages_done else (max_page_done + 1),
+                start_page=(
+                    (max_page_done + 1) if not pages_done else (max_page_done + 1)
+                ),
                 end_page=None if not pages_done else max_page_done,
                 base_pages_completed=max_page_done,
                 base_questions=base_questions,
@@ -364,5 +439,3 @@ def _load_blocks(job: QuestionImportJob):
         except json.JSONDecodeError:
             raw = [{"type": "text", "content": raw, "metadata": {"source": "manual"}}]
     return raw
-
-

@@ -5,9 +5,9 @@ Revises: 7f8a4d4f9f2d
 Create Date: 2025-12-07 18:30:00.000000
 
 """
-from alembic import op
-import sqlalchemy as sa
 
+import sqlalchemy as sa
+from alembic import op
 
 revision = "85b2e3c1d7a5"
 down_revision = "7f8a4d4f9f2d"
@@ -20,43 +20,41 @@ def upgrade():
     conn.execute(
         sa.text(
             """
-            DELETE FROM question_explanations a
-            USING question_explanations b
-            WHERE a.id < b.id
-              AND a.question_id = b.question_id
-              AND a.language = b.language
+            DELETE FROM question_explanations
+            WHERE id NOT IN (
+                SELECT MAX(id)
+                FROM question_explanations
+                GROUP BY question_id, language
+            )
             """
         )
     )
-    op.drop_constraint(
-        "uq_question_explanations_question_language_answer",
-        "question_explanations",
-        type_="unique",
-    )
     with op.batch_alter_table("question_explanations") as batch_op:
+        batch_op.drop_constraint(
+            "uq_question_explanations_question_language_answer",
+            type_="unique",
+        )
         batch_op.drop_column("answer_value")
         batch_op.add_column(sa.Column("source", sa.String(length=32), nullable=True))
         batch_op.create_unique_constraint(
             "uq_question_explanations_question_language", ["question_id", "language"]
         )
     conn.execute(
-        sa.text(
-            "UPDATE question_explanations SET source = COALESCE(source, 'legacy')"
-        )
+        sa.text("UPDATE question_explanations SET source = COALESCE(source, 'legacy')")
     )
 
 
 def downgrade():
-    op.drop_constraint(
-        "uq_question_explanations_question_language",
-        "question_explanations",
-        type_="unique",
-    )
     with op.batch_alter_table("question_explanations") as batch_op:
+        batch_op.drop_constraint(
+            "uq_question_explanations_question_language",
+            type_="unique",
+        )
         batch_op.drop_column("source")
-        batch_op.add_column(sa.Column("answer_value", sa.String(length=32), nullable=True))
+        batch_op.add_column(
+            sa.Column("answer_value", sa.String(length=32), nullable=True)
+        )
         batch_op.create_unique_constraint(
             "uq_question_explanations_question_language_answer",
             ["question_id", "language", "answer_value"],
         )
-

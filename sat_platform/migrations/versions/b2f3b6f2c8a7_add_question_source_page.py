@@ -5,9 +5,8 @@ Revises: ab12d5c1f0b4
 Create Date: 2025-12-06 15:25:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "b2f3b6f2c8a7"
 down_revision = "ab12d5c1f0b4"
@@ -19,7 +18,9 @@ def upgrade():
     bind = op.get_bind()
     inspector = sa.inspect(bind)
     if "source_page" not in {col["name"] for col in inspector.get_columns("questions")}:
-        op.add_column("questions", sa.Column("source_page", sa.Integer(), nullable=True))
+        op.add_column(
+            "questions", sa.Column("source_page", sa.Integer(), nullable=True)
+        )
         # best-effort backfill from legacy "page" column when it's a simple integer
         dialect = bind.dialect.name
         if dialect == "sqlite":
@@ -44,4 +45,3 @@ def downgrade():
     inspector = sa.inspect(bind)
     if "source_page" in {col["name"] for col in inspector.get_columns("questions")}:
         op.drop_column("questions", "source_page")
-

@@ -35,4 +35,3 @@ def estimate_scores(user_id: int) -> dict:
     math_avg = mean(math_masteries) if math_masteries else mean(fallback)
 
     return {"rw": _score_from_mastery(rw_avg), "math": _score_from_mastery(math_avg)}
-

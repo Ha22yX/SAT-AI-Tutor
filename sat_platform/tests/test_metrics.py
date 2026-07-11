@@ -13,4 +13,3 @@ def test_request_id_header(client):
     resp = client.get("/api/auth/ping")
     assert resp.status_code == 200
     assert "X-Request-ID" in resp.headers
-

@@ -34,4 +34,3 @@ def test_student_cannot_send_test_email(monkeypatch, client, student_token):
         headers={"Authorization": f"Bearer {student_token}"},
     )
     assert resp.status_code == 403
-

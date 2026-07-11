@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, date, timezone
+from datetime import date, datetime, timezone
 
 from ..extensions import db
 
@@ -57,7 +57,9 @@ class UserProfile(db.Model):
     __tablename__ = "user_profiles"
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False
+    )
     target_score_rw = db.Column(db.Integer)
     target_score_math = db.Column(db.Integer)
     exam_date = db.Column(db.Date)
@@ -75,7 +77,9 @@ class UserProfile(db.Model):
     user = db.relationship("User", back_populates="profile")
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        date_str = self.exam_date.isoformat() if isinstance(self.exam_date, date) else "N/A"
+        date_str = (
+            self.exam_date.isoformat() if isinstance(self.exam_date, date) else "N/A"
+        )
         return f"<UserProfile user_id={self.user_id} exam_date={date_str}>"
 
 
@@ -102,11 +106,11 @@ class UserSubscriptionLog(db.Model):
     __tablename__ = "user_subscription_logs"
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), index=True, nullable=False)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), index=True, nullable=False
+    )
     operator_id = db.Column(db.Integer, db.ForeignKey("users.id"))
     action = db.Column(db.String(64), nullable=False)
     delta_days = db.Column(db.Integer, nullable=True)
     note = db.Column(db.String(255))
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
-
-

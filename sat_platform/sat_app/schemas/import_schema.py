@@ -6,11 +6,16 @@ from marshmallow import Schema, fields, validate
 
 
 class QuestionBlockSchema(Schema):
-    type = fields.String(required=True, validate=validate.OneOf(["text", "image", "binary"]))
+    type = fields.String(
+        required=True, validate=validate.OneOf(["text", "image", "binary"])
+    )
     content = fields.String(load_default="")
     metadata = fields.Dict(load_default=dict)
 
 
 class ManualParseSchema(Schema):
-    blocks = fields.List(fields.Nested(QuestionBlockSchema), required=True, validate=validate.Length(min=1))
-
+    blocks = fields.List(
+        fields.Nested(QuestionBlockSchema),
+        required=True,
+        validate=validate.Length(min=1),
+    )

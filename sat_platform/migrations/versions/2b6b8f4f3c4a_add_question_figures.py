@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "2b6b8f4f3c4a"
@@ -23,11 +23,15 @@ def _ensure_column(table_name: str, column: sa.Column) -> None:
 def upgrade():
     _ensure_column(
         "question_drafts",
-        sa.Column("has_figure", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+        sa.Column(
+            "has_figure", sa.Boolean(), server_default=sa.text("0"), nullable=False
+        ),
     )
     _ensure_column(
         "questions",
-        sa.Column("has_figure", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+        sa.Column(
+            "has_figure", sa.Boolean(), server_default=sa.text("0"), nullable=False
+        ),
     )
 
     bind = op.get_bind()
@@ -38,12 +42,21 @@ def upgrade():
     op.create_table(
         "question_figures",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("question_id", sa.Integer(), sa.ForeignKey("questions.id"), nullable=True),
-        sa.Column("draft_id", sa.Integer(), sa.ForeignKey("question_drafts.id"), nullable=True),
+        sa.Column(
+            "question_id", sa.Integer(), sa.ForeignKey("questions.id"), nullable=True
+        ),
+        sa.Column(
+            "draft_id", sa.Integer(), sa.ForeignKey("question_drafts.id"), nullable=True
+        ),
         sa.Column("image_path", sa.String(length=512), nullable=False),
         sa.Column("description", sa.String(length=255)),
         sa.Column("bbox", sa.JSON),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
@@ -57,4 +70,3 @@ def downgrade():
     op.drop_table("question_figures")
     op.drop_column("questions", "has_figure")
     op.drop_column("question_drafts", "has_figure")
-

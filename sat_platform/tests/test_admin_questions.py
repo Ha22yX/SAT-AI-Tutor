@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import copy
 
-import pytest
-
-
 QUESTION_PAYLOAD = {
     "section": "RW",
     "sub_section": "Grammar",
@@ -96,4 +93,3 @@ def _login_root_admin(client):
 
 def _auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
-

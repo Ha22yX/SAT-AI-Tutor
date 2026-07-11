@@ -5,9 +5,8 @@ Revises: c6e4e6179c1a
 Create Date: 2025-12-06 13:10:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "d3f1a6b2c851"
 down_revision = "c6e4e6179c1a"
@@ -49,4 +48,3 @@ def downgrade():
             table_name="email_verification_tickets",
         )
         op.drop_table("email_verification_tickets")
-

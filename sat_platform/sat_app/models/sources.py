@@ -18,7 +18,9 @@ class QuestionSource(db.Model):
     filename = db.Column(db.String(255), nullable=False)
     original_name = db.Column(db.String(255), nullable=True)
     stored_path = db.Column(db.String(512), nullable=False)
-    uploaded_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    uploaded_by = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
     total_pages = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
 
@@ -40,5 +42,3 @@ class QuestionSource(db.Model):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
-
-

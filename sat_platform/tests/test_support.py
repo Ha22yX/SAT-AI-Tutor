@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import pytest
-
-from sat_app.services import settings_service, mail_service
+from sat_app.services import mail_service, settings_service
 
 
 def _auth_header(token: str) -> dict[str, str]:
@@ -36,7 +34,11 @@ def test_submit_suggestion_sends_email(client, student_token, monkeypatch):
 
     resp = client.post(
         "/api/support/suggestions",
-        json={"title": "Bug report", "content": "Details here", "contact": "student@demo.com"},
+        json={
+            "title": "Bug report",
+            "content": "Details here",
+            "contact": "student@demo.com",
+        },
         headers=_auth_header(student_token),
     )
     assert resp.status_code == 200
@@ -54,4 +56,3 @@ def test_submit_suggestion_without_recipient_fails(client, student_token):
         headers=_auth_header(student_token),
     )
     assert resp.status_code == 400
-

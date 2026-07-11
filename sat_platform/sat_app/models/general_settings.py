@@ -16,6 +16,6 @@ class GeneralSetting(db.Model):
 
     key = db.Column(db.String(64), primary_key=True)
     value = db.Column(db.Text, nullable=True)
-    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
-
-
+    updated_at = db.Column(
+        db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )

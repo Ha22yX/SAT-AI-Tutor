@@ -91,4 +91,3 @@ def get_due_questions(
         except Exception:
             pass
     return results
-

@@ -5,9 +5,15 @@ from __future__ import annotations
 import io
 
 import pytest
-
 from sat_app.extensions import db
-from sat_app.models import QuestionDraft, Question, QuestionFigure, QuestionImportJob, QuestionSource, User
+from sat_app.models import (
+    Question,
+    QuestionDraft,
+    QuestionFigure,
+    QuestionImportJob,
+    QuestionSource,
+    User,
+)
 from sat_app.services import question_service
 
 
@@ -24,7 +30,9 @@ def mock_parser(monkeypatch):
             "metadata": block.get("metadata", {}),
         }
 
-    monkeypatch.setattr("sat_app.services.ai_question_parser.parse_raw_question_block", _fake_parser)
+    monkeypatch.setattr(
+        "sat_app.services.ai_question_parser.parse_raw_question_block", _fake_parser
+    )
 
 
 @pytest.fixture()
@@ -50,7 +58,9 @@ def mock_pdf_ingest(monkeypatch):
                 question_cb(payload)
         return payloads
 
-    monkeypatch.setattr("sat_app.services.pdf_ingest_service.ingest_pdf_document", _fake_ingest)
+    monkeypatch.setattr(
+        "sat_app.services.pdf_ingest_service.ingest_pdf_document", _fake_ingest
+    )
 
 
 def test_manual_parse_creates_drafts(client, admin_token, mock_parser):
@@ -107,7 +117,9 @@ def test_pdf_ingest_flow(client, admin_token, mock_pdf_ingest):
         assert QuestionSource.query.count() == 1
 
 
-def test_pdf_ingest_duplicate_requires_confirmation(client, admin_token, mock_pdf_ingest):
+def test_pdf_ingest_duplicate_requires_confirmation(
+    client, admin_token, mock_pdf_ingest
+):
     first_payload = io.BytesIO(b"%PDF-1.4 original")
     resp = client.post(
         "/api/admin/questions/ingest-pdf",
@@ -399,7 +411,9 @@ def test_source_deleted_when_questions_removed(client, admin_token):
     )
     db.session.add(source)
     db.session.flush()
-    job = QuestionImportJob(user_id=admin.id, source_id=source.id, ingest_strategy="vision_pdf")
+    job = QuestionImportJob(
+        user_id=admin.id, source_id=source.id, ingest_strategy="vision_pdf"
+    )
     db.session.add(job)
     db.session.flush()
     draft = QuestionDraft(
@@ -442,5 +456,3 @@ def test_source_deleted_when_questions_removed(client, admin_token):
     job_ref = db.session.get(QuestionImportJob, job.id)
     assert job_ref is not None
     assert job_ref.source_id is None
-
-

@@ -24,7 +24,10 @@ class RegisterSchema(Schema):
     password = fields.String(required=True, validate=validate.Length(min=8))
     username = fields.String(validate=validate.Length(min=3, max=64))
     code = fields.String(
-        required=False, validate=validate.Length(equal=6), allow_none=True, load_default=None
+        required=False,
+        validate=validate.Length(equal=6),
+        allow_none=True,
+        load_default=None,
     )
     profile = fields.Nested(UserProfileSchema, load_default=dict)
 
@@ -105,7 +108,9 @@ class EmailResendSchema(Schema):
 
 class VerificationRequestSchema(Schema):
     email = fields.Email(required=True)
-    language_preference = fields.String(validate=validate.OneOf(("en", "zh")), load_default="en")
+    language_preference = fields.String(
+        validate=validate.OneOf(("en", "zh")), load_default="en"
+    )
 
 
 class EmailChangeRequestSchema(Schema):
@@ -115,4 +120,3 @@ class EmailChangeRequestSchema(Schema):
 class EmailChangeConfirmSchema(Schema):
     new_email = fields.Email(required=True)
     code = fields.String(required=True, validate=validate.Length(equal=6))
-

@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import timedelta, timezone, datetime
+from datetime import datetime, timedelta, timezone
 
 import pytest
-
 from sat_app.extensions import db
-from sat_app.models import Question, User, StudySession, UserQuestionLog, SkillMastery, QuestionReview
+from sat_app.models import (
+    Question,
+    QuestionReview,
+    SkillMastery,
+    StudySession,
+    User,
+    UserQuestionLog,
+)
 from sat_app.services import adaptive_engine, spaced_repetition
 
 
@@ -42,7 +48,7 @@ def _create_question(section: str, skill_tag: str, text: str) -> Question:
 def test_select_prioritizes_low_mastery(app_with_db, student_id):
     with app_with_db.app_context():
         weak_question = _create_question("RW", "grammar", "Weak skill")
-        strong_question = _create_question("RW", "vocab", "Strong skill")
+        _create_question("RW", "vocab", "Strong skill")
 
         low_mastery = SkillMastery(
             user_id=student_id,
@@ -81,7 +87,9 @@ def test_update_mastery_from_log_adjusts_scores(app_with_db, student_id):
         db.session.flush()
 
         adaptive_engine.update_mastery_from_log(log, question)
-        mastery = SkillMastery.query.filter_by(user_id=student_id, skill_tag="M_Algebra").one()
+        mastery = SkillMastery.query.filter_by(
+            user_id=student_id, skill_tag="M_Algebra"
+        ).one()
         assert mastery.mastery_score < 0.5
 
         log_correct = UserQuestionLog(
@@ -96,7 +104,9 @@ def test_update_mastery_from_log_adjusts_scores(app_with_db, student_id):
         db.session.flush()
 
         adaptive_engine.update_mastery_from_log(log_correct, question)
-        mastery = SkillMastery.query.filter_by(user_id=student_id, skill_tag="M_Algebra").one()
+        mastery = SkillMastery.query.filter_by(
+            user_id=student_id, skill_tag="M_Algebra"
+        ).one()
         assert mastery.mastery_score > 0.4
 
 
@@ -119,11 +129,15 @@ def test_spaced_repetition_injects_due_reviews(app_with_db, student_id):
 
         spaced_repetition.schedule_from_log(log)
 
-        review = QuestionReview.query.filter_by(user_id=student_id, question_id=question.id).one()
+        review = QuestionReview.query.filter_by(
+            user_id=student_id, question_id=question.id
+        ).one()
         review.due_at = datetime.now(timezone.utc) - timedelta(hours=1)
         db.session.commit()
 
-        due_questions = spaced_repetition.get_due_questions(student_id, limit=5, section="RW")
+        due_questions = spaced_repetition.get_due_questions(
+            student_id, limit=5, section="RW"
+        )
         assert due_questions
         assert due_questions[0].id == question.id
 
@@ -139,12 +153,15 @@ def test_mastery_snapshot_marks_missing_data(app_with_db, student_id):
         assert empty_entry["mastery_score"] == pytest.approx(default_mastery, rel=0.2)
 
         target_tag = snapshot[0]["skill_tag"]
-        mastery = SkillMastery(user_id=student_id, skill_tag=target_tag, mastery_score=0.7)
+        mastery = SkillMastery(
+            user_id=student_id, skill_tag=target_tag, mastery_score=0.7
+        )
         db.session.add(mastery)
         db.session.commit()
 
         updated_snapshot = adaptive_engine.get_mastery_snapshot(student_id)
-        entry = next(item for item in updated_snapshot if item["skill_tag"] == target_tag)
+        entry = next(
+            item for item in updated_snapshot if item["skill_tag"] == target_tag
+        )
         assert entry["has_data"] is True
         assert entry["observed_score"] == pytest.approx(0.7)
-

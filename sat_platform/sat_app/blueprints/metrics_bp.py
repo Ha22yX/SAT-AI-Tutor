@@ -13,4 +13,3 @@ metrics_bp = Blueprint("metrics_bp", __name__)
 def metrics():
     payload, content_type = latest_metrics()
     return Response(payload, mimetype=content_type)
-

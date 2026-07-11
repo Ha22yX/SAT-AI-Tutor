@@ -4,20 +4,20 @@ from __future__ import annotations
 
 from http import HTTPStatus
 
-from flask import Blueprint, jsonify, request, abort
-from flask_jwt_extended import jwt_required, current_user
-from marshmallow import Schema, fields, ValidationError
+from flask import Blueprint, abort, jsonify, request
+from flask_jwt_extended import current_user, jwt_required
+from marshmallow import Schema, ValidationError, fields
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from ..extensions import db
-from ..models import Question, StudySession, UserQuestionLog, QuestionExplanationCache
+from ..models import Question, QuestionExplanationCache, StudySession, UserQuestionLog
 from ..services import (
-    ai_explainer,
     ai_diagnostic,
-    session_service,
+    ai_explainer,
     membership_service,
     question_explanation_service,
+    session_service,
 )
 
 ai_bp = Blueprint("ai_bp", __name__)
@@ -31,6 +31,7 @@ class ExplainRequestSchema(Schema):
 
 
 explain_schema = ExplainRequestSchema()
+
 
 class ExplainDetailSchema(Schema):
     question_id = fields.Integer(required=True)
@@ -75,7 +76,9 @@ def explain():
 @jwt_required()
 def diagnose():
     report = ai_diagnostic.generate_report(current_user.id)
-    return jsonify({"predictor": report.predictor_payload, "narrative": report.narrative})
+    return jsonify(
+        {"predictor": report.predictor_payload, "narrative": report.narrative}
+    )
 
 
 @ai_bp.get("/explain/history")
@@ -133,7 +136,9 @@ def explain_history():
                 )
             )
         else:
-            base_query = base_query.filter(Question.question_uid.ilike(f"%{search.strip()}%"))
+            base_query = base_query.filter(
+                Question.question_uid.ilike(f"%{search.strip()}%")
+            )
 
     latest_subquery = base_query.subquery()
     latest_query = db.session.query(
@@ -164,12 +169,10 @@ def explain_history():
     question_ids = [item.question_id for item in pagination.items]
     explained_ids: set[int] = set()
     if question_ids:
-        rows = (
-            QuestionExplanationCache.query.filter(
-                QuestionExplanationCache.question_id.in_(question_ids),
-                QuestionExplanationCache.language == language,
-            ).all()
-        )
+        rows = QuestionExplanationCache.query.filter(
+            QuestionExplanationCache.question_id.in_(question_ids),
+            QuestionExplanationCache.language == language,
+        ).all()
         explained_ids = {row.question_id for row in rows}
 
     history_items = []
@@ -210,7 +213,9 @@ def explain_detail():
     if payload.get("log_id"):
         log = (
             UserQuestionLog.query.options(joinedload(UserQuestionLog.study_session))
-            .filter_by(id=payload["log_id"], user_id=current_user.id, question_id=question.id)
+            .filter_by(
+                id=payload["log_id"], user_id=current_user.id, question_id=question.id
+            )
             .first()
         )
         if log is None:
@@ -229,9 +234,9 @@ def explain_detail():
     if log and explanation_payload and not log.explanation:
         log.explanation = explanation_payload
         db.session.commit()
-    attempt_count = (
-        UserQuestionLog.query.filter_by(user_id=current_user.id, question_id=question.id).count()
-    )
+    attempt_count = UserQuestionLog.query.filter_by(
+        user_id=current_user.id, question_id=question.id
+    ).count()
 
     meta = _serialize_detail_meta(question, log)
     meta["attempt_count"] = attempt_count
@@ -261,7 +266,9 @@ def explain_generate():
     if payload.get("log_id"):
         log = (
             UserQuestionLog.query.options(joinedload(UserQuestionLog.study_session))
-            .filter_by(id=payload["log_id"], user_id=current_user.id, question_id=question.id)
+            .filter_by(
+                id=payload["log_id"], user_id=current_user.id, question_id=question.id
+            )
             .first()
         )
         if log is None:
@@ -327,7 +334,9 @@ def _serialize_history_entry(row) -> dict:
         "skill_tags": mapping["skill_tags"] or [],
         "difficulty": mapping["difficulty"],
         "is_correct": mapping["is_correct"],
-        "answered_at": mapping["answered_at"].isoformat() if mapping["answered_at"] else None,
+        "answered_at": (
+            mapping["answered_at"].isoformat() if mapping["answered_at"] else None
+        ),
         "time_spent_sec": mapping["time_spent_sec"],
         "session_type": mapping["session_type"],
         "plan_block_id": mapping["plan_block_id"],
@@ -353,7 +362,8 @@ def _serialize_detail_meta(question: Question, log: UserQuestionLog | None) -> d
         "skill_tags": question.skill_tags or [],
         "session_type": session.session_type if session else None,
         "plan_block_id": session.plan_block_id if session else None,
-        "source_label": getattr(question.source, "original_name", None) or question.source,
+        "source_label": getattr(question.source, "original_name", None)
+        or question.source,
     }
 
 
@@ -378,4 +388,3 @@ def _resolve_text_explanation(question: Question) -> str | None:
             if isinstance(value, str) and value.strip():
                 return value.strip()
     return None
-

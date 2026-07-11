@@ -66,7 +66,9 @@ class Question(db.Model):
     irt_b = db.Column(db.Float)
     skill_tags = db.Column(db.JSON)
     estimated_time_sec = db.Column(db.Integer)
-    question_type = db.Column(db.String(16), nullable=False, server_default="choice")  # choice | fill
+    question_type = db.Column(
+        db.String(16), nullable=False, server_default="choice"
+    )  # choice | fill
     answer_schema = db.Column(db.JSON)
     source = db.Column(db.String(255))
     page = db.Column(db.String(32))
@@ -96,16 +98,22 @@ class QuestionFigure(db.Model):
     description = db.Column(db.String(255))
     bbox = db.Column(db.JSON)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
 
-    question = db.relationship("Question", backref=db.backref("figures", lazy="dynamic"))
+    question = db.relationship(
+        "Question", backref=db.backref("figures", lazy="dynamic")
+    )
 
 
 class QuestionExplanationCache(db.Model):
     __tablename__ = "question_explanations"
 
     id = db.Column(db.Integer, primary_key=True)
-    question_id = db.Column(db.Integer, db.ForeignKey("questions.id"), nullable=False, index=True)
+    question_id = db.Column(
+        db.Integer, db.ForeignKey("questions.id"), nullable=False, index=True
+    )
     language = db.Column(db.String(16), nullable=False, default="en")
     explanation = db.Column(db.JSON, nullable=False)
     source = db.Column(db.String(32))
@@ -117,7 +125,9 @@ class QuestionExplanationCache(db.Model):
         onupdate=utcnow,
     )
 
-    question = db.relationship("Question", backref=db.backref("explanations", lazy="dynamic"))
+    question = db.relationship(
+        "Question", backref=db.backref("explanations", lazy="dynamic")
+    )
 
     __table_args__ = (
         db.UniqueConstraint(
@@ -126,4 +136,3 @@ class QuestionExplanationCache(db.Model):
             name="uq_question_explanations_question_language",
         ),
     )
-

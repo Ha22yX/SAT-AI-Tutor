@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, date
+from datetime import date, datetime, timezone
 from statistics import mean
-from typing import List, Dict, Any, Tuple
+from typing import Dict, List, Tuple
 
 from flask import current_app
 
@@ -143,7 +143,10 @@ def get_efficiency_summary(user_id: int, limit: int | None = None) -> dict:
     overall_avg = mean(overall_times) if overall_times else None
     total_section_samples = sum(len(times) for times in by_section.values())
     overall_recommended = (
-        sum(recommended.get(section, 70) * len(times) for section, times in by_section.items())
+        sum(
+            recommended.get(section, 70) * len(times)
+            for section, times in by_section.items()
+        )
         / total_section_samples
         if total_section_samples
         else None
@@ -151,7 +154,9 @@ def get_efficiency_summary(user_id: int, limit: int | None = None) -> dict:
     return {
         "sample_size": len(samples),
         "sections": sections_payload,
-        "slow_skills": sorted(slow_skills, key=lambda item: item["avg_time_sec"], reverse=True),
+        "slow_skills": sorted(
+            slow_skills, key=lambda item: item["avg_time_sec"], reverse=True
+        ),
         "overall_avg_time_sec": overall_avg,
         "overall_recommended_time_sec": overall_recommended,
     }
@@ -191,4 +196,3 @@ def get_mistake_queue(user_id: int, limit: int | None = None) -> dict:
         "pending_explanations": pending_explanations,
         "total_mistakes": len(items),
     }
-

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from sat_app.extensions import db
-from sat_app.models import User, UserProfile, DiagnosticAttempt
+from sat_app.models import DiagnosticAttempt, User, UserProfile
 from sat_app.services import learning_plan_service
 
 

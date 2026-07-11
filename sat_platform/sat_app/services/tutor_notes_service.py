@@ -8,10 +8,14 @@ from typing import List, Tuple
 from flask import current_app
 
 from ..extensions import db
-from ..models import TutorNote, User, StudySession
-from .learning_plan_service import get_or_generate_plan, _resolve_today, _resolve_language
+from ..models import StudySession, TutorNote, User
 from .adaptive_engine import get_mastery_snapshot
 from .ai_client import get_ai_client
+from .learning_plan_service import (
+    _resolve_language,
+    _resolve_today,
+    get_or_generate_plan,
+)
 
 
 def _serialize_session(session: StudySession) -> dict:
@@ -43,7 +47,11 @@ def _prepare_mastery_payload(mastery_entries: List[dict]) -> Tuple[List[dict], d
                 "label": label,
                 "has_data": has_data,
                 "observed_score": observed_score,
-                "observed_percent": round(observed_score * 100, 1) if isinstance(observed_score, (int, float)) else None,
+                "observed_percent": (
+                    round(observed_score * 100, 1)
+                    if isinstance(observed_score, (int, float))
+                    else None
+                ),
                 "last_practiced_at": entry.get("last_practiced_at"),
             }
         )
@@ -57,7 +65,9 @@ def _prepare_mastery_payload(mastery_entries: List[dict]) -> Tuple[List[dict], d
     return transformed, summary
 
 
-def _build_payload(user: User, plan_detail: dict, sessions: List[StudySession], mastery: List[dict]) -> dict:
+def _build_payload(
+    user: User, plan_detail: dict, sessions: List[StudySession], mastery: List[dict]
+) -> dict:
     session_payload = [_serialize_session(s) for s in sessions]
     mastery_payload, mastery_summary = _prepare_mastery_payload(mastery)
     return {
@@ -87,12 +97,14 @@ def _fallback_notes(language: str, plan_detail: dict, has_history: bool) -> dict
             "Keep following today's plan: "
             f"{plan_detail.get('target_minutes')} min · {plan_detail.get('target_questions')} questions."
         )
-        body_zh = (
-            f"继续执行今天的 {plan_detail.get('target_minutes')} 分钟 · {plan_detail.get('target_questions')} 题计划。"
-        )
+        body_zh = f"继续执行今天的 {plan_detail.get('target_minutes')} 分钟 · {plan_detail.get('target_questions')} 题计划。"
         if language == "zh":
-            return {"notes": [{"title": "今日目标", "body": body_zh, "priority": "info"}]}
-        return {"notes": [{"title": "Today's target", "body": body_en, "priority": "info"}]}
+            return {
+                "notes": [{"title": "今日目标", "body": body_zh, "priority": "info"}]
+            }
+        return {
+            "notes": [{"title": "Today's target", "body": body_en, "priority": "info"}]
+        }
 
     body_en = (
         "You're just starting—focus on finishing "
@@ -104,7 +116,9 @@ def _fallback_notes(language: str, plan_detail: dict, has_history: bool) -> dict
     )
     if language == "zh":
         return {"notes": [{"title": "新用户提示", "body": body_zh, "priority": "info"}]}
-    return {"notes": [{"title": "New student tip", "body": body_en, "priority": "info"}]}
+    return {
+        "notes": [{"title": "New student tip", "body": body_en, "priority": "info"}]
+    }
 
 
 def _call_ai(payload: dict, language: str) -> dict:
@@ -120,11 +134,20 @@ def _call_ai(payload: dict, language: str) -> dict:
     user_prompt = json.dumps(payload, ensure_ascii=False)
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Student language: {language}\nData: {user_prompt}"},
+        {
+            "role": "user",
+            "content": f"Student language: {language}\nData: {user_prompt}",
+        },
     ]
-    response = client.chat(messages, model=current_app.config.get("AI_TUTOR_NOTES_MODEL"))
+    response = client.chat(
+        messages, model=current_app.config.get("AI_TUTOR_NOTES_MODEL")
+    )
     try:
-        content = response.content[0].text if hasattr(response, "content") else response["choices"][0]["message"]["content"]
+        content = (
+            response.content[0].text
+            if hasattr(response, "content")
+            else response["choices"][0]["message"]["content"]
+        )
     except (KeyError, IndexError, AttributeError):
         content = "{}"
     try:
@@ -206,4 +229,3 @@ def get_or_generate_tutor_notes(
         cached.payload = notes_payload
     db.session.commit()
     return notes_payload
-

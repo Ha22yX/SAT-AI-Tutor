@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from flask import Blueprint, jsonify
-from flask_jwt_extended import jwt_required, current_user
+from flask_jwt_extended import current_user, jwt_required
 
 from ..services import analytics_service
 
@@ -34,4 +34,3 @@ def efficiency():
 def mistakes():
     payload = analytics_service.get_mistake_queue(current_user.id)
     return jsonify(payload)
-

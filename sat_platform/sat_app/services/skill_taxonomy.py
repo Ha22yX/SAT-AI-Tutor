@@ -74,9 +74,15 @@ _SKILL_TAXONOMY: List[SkillDescriptor] = [
     ),
 ]
 
-SKILL_ORDERED_TAGS: Sequence[str] = tuple(entry.tag for entry in sorted(_SKILL_TAXONOMY, key=lambda entry: entry.order))
-_SKILL_LOOKUP: Dict[str, SkillDescriptor] = {entry.tag: entry for entry in _SKILL_TAXONOMY}
-_SKILL_LOWER_LOOKUP: Dict[str, str] = {entry.tag.lower(): entry.tag for entry in _SKILL_TAXONOMY}
+SKILL_ORDERED_TAGS: Sequence[str] = tuple(
+    entry.tag for entry in sorted(_SKILL_TAXONOMY, key=lambda entry: entry.order)
+)
+_SKILL_LOOKUP: Dict[str, SkillDescriptor] = {
+    entry.tag: entry for entry in _SKILL_TAXONOMY
+}
+_SKILL_LOWER_LOOKUP: Dict[str, str] = {
+    entry.tag.lower(): entry.tag for entry in _SKILL_TAXONOMY
+}
 
 _SKILL_SYNONYMS: Dict[str, str] = {
     # Legacy canonical tags
@@ -173,7 +179,9 @@ def canonicalize_tag(value: str | None) -> str | None:
     return _SKILL_LOWER_LOOKUP.get(lowered)
 
 
-def canonicalize_tags(values: Iterable[str] | None, *, limit: int | None = 2) -> List[str]:
+def canonicalize_tags(
+    values: Iterable[str] | None, *, limit: int | None = 2
+) -> List[str]:
     normalized: List[str] = []
     if not values:
         return normalized
@@ -195,5 +203,3 @@ def infer_section_from_tag(tag: str) -> str:
     if descriptor:
         return "RW" if descriptor.domain == "Reading & Writing" else "Math"
     return "RW" if tag.lower().startswith("rw") else "Math"
-
-

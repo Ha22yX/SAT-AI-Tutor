@@ -56,4 +56,3 @@ def assign_request_id() -> str:
         req_id = uuid4().hex
     g.request_id = req_id
     return req_id
-

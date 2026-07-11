@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "a4cbdc0c9fd7"
@@ -32,7 +32,11 @@ def upgrade():
             "question_import_jobs",
             sa.Column("last_progress_at", sa.DateTime(timezone=True), nullable=True),
         )
-        bind.execute(sa.text("UPDATE question_import_jobs SET last_progress_at = CURRENT_TIMESTAMP"))
+        bind.execute(
+            sa.text(
+                "UPDATE question_import_jobs SET last_progress_at = CURRENT_TIMESTAMP"
+            )
+        )
 
 
 def downgrade():
@@ -46,4 +50,3 @@ def downgrade():
         op.drop_column("question_import_jobs", "status_message")
     if "current_page" in existing:
         op.drop_column("question_import_jobs", "current_page")
-

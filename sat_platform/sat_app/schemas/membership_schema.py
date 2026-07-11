@@ -1,4 +1,4 @@
-" ""Schemas for membership orders.""" 
+" " "Schemas for membership orders." ""
 
 from __future__ import annotations
 
@@ -21,11 +21,14 @@ class MembershipOrderSchema(Schema):
 
 
 class MembershipOrderCreateSchema(Schema):
-    plan = fields.String(required=True, validate=validate.OneOf(["monthly", "quarterly"]))
+    plan = fields.String(
+        required=True, validate=validate.OneOf(["monthly", "quarterly"])
+    )
     note = fields.String(validate=validate.Length(max=255), allow_none=True)
 
 
 class MembershipOrderDecisionSchema(Schema):
-    action = fields.String(required=True, validate=validate.OneOf(["approve", "reject"]))
+    action = fields.String(
+        required=True, validate=validate.OneOf(["approve", "reject"])
+    )
     note = fields.String(validate=validate.Length(max=255), allow_none=True)
-

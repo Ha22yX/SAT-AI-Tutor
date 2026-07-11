@@ -64,14 +64,18 @@ def update_question_difficulty_stats(question: Question, log: UserQuestionLog) -
     }
 
     total_attempts = int(stats.get("total_attempts") or 0) + 1
-    correct_attempts = int(stats.get("correct_attempts") or 0) + (1 if log.is_correct else 0)
+    correct_attempts = int(stats.get("correct_attempts") or 0) + (
+        1 if log.is_correct else 0
+    )
     prev_avg_time = stats.get("avg_time_sec")
     time_spent = log.time_spent_sec or 0
     if time_spent and time_spent > 0:
         if prev_avg_time is None:
             avg_time = time_spent
         else:
-            avg_time = (prev_avg_time * (total_attempts - 1) + time_spent) / total_attempts
+            avg_time = (
+                prev_avg_time * (total_attempts - 1) + time_spent
+            ) / total_attempts
     else:
         avg_time = prev_avg_time
 
@@ -97,8 +101,9 @@ def update_question_difficulty_stats(question: Question, log: UserQuestionLog) -
             question.difficulty_level = inferred_level
             metadata.setdefault("difficulty_notes", {})
             metadata["difficulty_notes"]["auto_inferred_level"] = inferred_level
-            metadata["difficulty_notes"]["observed_accuracy"] = round(observed_accuracy, 3)
+            metadata["difficulty_notes"]["observed_accuracy"] = round(
+                observed_accuracy, 3
+            )
             question.metadata_json = metadata
 
     db.session.add(question)
-

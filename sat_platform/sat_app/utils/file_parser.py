@@ -58,4 +58,3 @@ def parse_file(stream: BinaryIO, filename: str) -> List[dict]:
             "metadata": {"source": filename, "payload_hex": data_b64[:1024]},
         }
     ]
-
