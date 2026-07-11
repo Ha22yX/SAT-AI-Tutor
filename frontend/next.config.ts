@@ -1,11 +1,7 @@
 import type { NextConfig } from "next";
 
-// Single source of truth for backend API base.
-// Prefer explicitly configured NEXT_PUBLIC_API_BASE; otherwise fall back to LAN IP.
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ||
-  process.env.API_BASE ||
-  "http://192.168.50.235:5080";
+// Server-side rewrite target. The browser still calls same-origin /api.
+const API_BASE = process.env.API_BASE || "http://127.0.0.1:5080";
 
 const nextConfig: NextConfig = {
   async rewrites() {

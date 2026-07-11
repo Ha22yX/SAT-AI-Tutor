@@ -1,15 +1,18 @@
 // Prefer current host; if running dev on port 3000, map to backend 5080 on same host.
 function resolveDefaultApiBase(): string {
-  // Server-side渲染或未设置环境变量时的安全默认值：本机 5080
+  // Safe default for server-side rendering or unset environment variables.
   if (typeof window === "undefined") {
     return "http://127.0.0.1:5080";
   }
+
   const { protocol, hostname, port } = window.location;
-  // 常见本地前端端口 3000/3001，对应后端 5080
+
+  // Local frontend dev ports map to the Flask backend on 5080.
   if (port === "3000" || port === "3001") {
     return `${protocol}//${hostname}:5080`;
   }
-  // 同域部署则直接用当前来源
+
+  // Same-origin deployments can call the current origin directly.
   return window.location.origin;
 }
 
@@ -22,4 +25,3 @@ export const env = {
     process.env.NEXT_PUBLIC_GAMIFICATION_COPY ||
     "Complete a block to keep your streak alive!",
 };
-
