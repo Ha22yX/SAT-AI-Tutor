@@ -733,7 +733,11 @@ def _enrich_item(item: dict, *, job_id: int | None) -> dict | None:
     if "metadata_json" in payload and "metadata" not in payload:
         payload["metadata"] = payload.pop("metadata_json")
     passage = payload.get("passage")
-    if isinstance(passage, dict) and "metadata_json" in passage and "metadata" not in passage:
+    if (
+        isinstance(passage, dict)
+        and "metadata_json" in passage
+        and "metadata" not in passage
+    ):
         passage["metadata"] = passage.pop("metadata_json")
     if coarse_uid:
         payload["coarse_uid"] = coarse_uid
@@ -1064,7 +1068,9 @@ def _response_error_excerpt(response: requests.Response | None) -> str:
         return ""
     try:
         data = response.json()
-        message = ((data.get("error") or {}).get("message") if isinstance(data, dict) else None)
+        message = (
+            (data.get("error") or {}).get("message") if isinstance(data, dict) else None
+        )
         if message:
             return str(message)[:500]
     except Exception:

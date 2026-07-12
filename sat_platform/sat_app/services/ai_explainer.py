@@ -413,7 +413,9 @@ def generate_explanation(
                 output = raw.get("output")
                 if isinstance(output, list):
                     for item in output:
-                        content = item.get("content") if isinstance(item, dict) else None
+                        content = (
+                            item.get("content") if isinstance(item, dict) else None
+                        )
                         if not isinstance(content, list):
                             continue
                         for text_obj in content:
