@@ -7,14 +7,16 @@ import { AxiosError } from "axios";
 import { useAuth } from "@/hooks/use-auth";
 import { extractErrorMessage } from "@/lib/errors";
 import { useI18n } from "@/hooks/use-i18n";
+import { getLoginPrefill } from "@/lib/login-prefill";
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const prefill = getLoginPrefill(searchParams);
   const { login, loading, error } = useAuth();
   const { t } = useI18n();
-  const [identifier, setIdentifier] = useState("");
-  const [password, setPassword] = useState("");
+  const [identifier, setIdentifier] = useState(prefill?.identifier ?? "");
+  const [password, setPassword] = useState(prefill?.password ?? "");
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -96,4 +98,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

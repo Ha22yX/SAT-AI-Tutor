@@ -5,7 +5,7 @@
   <p>
     <a href="README.md">English</a>
     &middot;
-    <a href="https://sat.rosebeg.com/">在线案例</a>
+    <a href="https://sat.rosebeg.com/auth/login?demo=1">在线案例</a>
     &middot;
     <a href="#快速开始">快速开始</a>
     &middot;
@@ -25,7 +25,7 @@
 
 ## 在线案例
 
-访问案例页面：[https://sat.rosebeg.com/](https://sat.rosebeg.com/)。你可以使用下面的演示账号测试学生仪表盘、SAT 做题流程和 AI 答案分析功能。
+访问案例页面：[https://sat.rosebeg.com/auth/login?demo=1](https://sat.rosebeg.com/auth/login?demo=1)。这个链接会打开已自动填入演示账号的登录页，你可以继续测试学生仪表盘、SAT 做题流程和 AI 答案分析功能。
 
 | 角色 | 账号 | 密码 |
 | --- | --- | --- |

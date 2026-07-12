@@ -5,7 +5,7 @@
   <p>
     <a href="README.zh-CN.md">Chinese</a>
     &middot;
-    <a href="https://sat.rosebeg.com/">Live demo</a>
+    <a href="https://sat.rosebeg.com/auth/login?demo=1">Live demo</a>
     &middot;
     <a href="#quickstart">Quickstart</a>
     &middot;
@@ -25,7 +25,7 @@
 
 ## Live Demo
 
-Visit the hosted case-study site at [https://sat.rosebeg.com/](https://sat.rosebeg.com/). You can sign in with the demo account below to explore the student dashboard, SAT practice flow, and AI answer analysis.
+Visit the hosted case-study site at [https://sat.rosebeg.com/auth/login?demo=1](https://sat.rosebeg.com/auth/login?demo=1). The demo link opens the login page with the demo account already filled in, so you can explore the student dashboard, SAT practice flow, and AI answer analysis.
 
 | Role | Username | Password |
 | --- | --- | --- |
