@@ -47,7 +47,7 @@ import { FigureCropper } from "@/components/admin/figure-cropper";
 import { ImportWorkspace } from "@/components/admin/import-workspace";
 import { FigureSource } from "@/types/figure";
 import { getCroppedBlob, SelectionRect } from "@/lib/image";
-import { env } from "@/lib/env";
+import { buildApiUrl, env } from "@/lib/env";
 import { getClientToken } from "@/lib/auth-storage";
 import { useI18n } from "@/hooks/use-i18n";
 import { listMembershipOrdersAdmin, decideMembershipOrder } from "@/services/membership";
@@ -2231,8 +2231,7 @@ function AIPaperGeneratorTab() {
     if (!token) {
       return undefined;
     }
-    const baseUrl = env.apiBaseUrl.replace(/\/$/, "");
-    const url = new URL("/api/admin/questions/imports/events", baseUrl);
+    const url = new URL(buildApiUrl("/api/admin/questions/imports/events"));
     url.searchParams.set("token", token);
     const source = new EventSource(url.toString());
 
@@ -2859,4 +2858,3 @@ type QuestionFigureModalState = {
   loading: boolean;
   page?: number;
 };
-

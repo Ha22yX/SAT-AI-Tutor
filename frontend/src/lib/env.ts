@@ -25,3 +25,28 @@ export const env = {
     process.env.NEXT_PUBLIC_GAMIFICATION_COPY ||
     "Complete a block to keep your streak alive!",
 };
+
+export function buildApiUrl(path: string): string {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const fallbackOrigin =
+    typeof window === "undefined" ? "http://127.0.0.1:5080" : window.location.origin;
+  const configuredBase = (env.apiBaseUrl || "").replace(/\/$/, "");
+
+  let baseUrl: URL;
+  try {
+    baseUrl = new URL(configuredBase || fallbackOrigin);
+  } catch {
+    const relativeBase = configuredBase.startsWith("/")
+      ? configuredBase
+      : `/${configuredBase}`;
+    baseUrl = new URL(relativeBase, fallbackOrigin);
+  }
+
+  const basePath = baseUrl.pathname.replace(/\/$/, "");
+  const pathWithoutDuplicateApi =
+    basePath.endsWith("/api") && normalizedPath.startsWith("/api/")
+      ? normalizedPath.slice("/api".length)
+      : normalizedPath;
+
+  return `${baseUrl.origin}${basePath}${pathWithoutDuplicateApi}`;
+}

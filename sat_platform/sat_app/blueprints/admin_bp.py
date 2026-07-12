@@ -2093,21 +2093,10 @@ def publish_draft(draft_id: int):
             current_app.config.get("OPENAI_API_KEY")
             or current_app.config.get("AI_API_KEY")
         )
-        should_generate_now = has_ai_key and not requires_figure
-        if should_generate_now:
-            try:
-                if missing_langs:
-                    question_explanation_service.ensure_explanations_for_languages(
-                        question=question,
-                        languages=missing_langs,
-                        source="ingest",
-                    )
-            except Exception:  # pragma: no cover - logging only
-                current_app.logger.exception(
-                    "Failed to pre-generate explanations for question",
-                    extra={"question_id": question.id, "missing_langs": missing_langs},
-                )
-        elif has_ai_key:
+        # Publishing must stay fast and reliable. AI explanations can take tens
+        # of seconds or fail independently, so generate missing explanations
+        # after the question is committed instead of blocking the admin request.
+        if has_ai_key:
             post_publish_langs = missing_langs
         # Ensure all pending state (question/figures) is flushed before updating draft link.
         db.session.flush()

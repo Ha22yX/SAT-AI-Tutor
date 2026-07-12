@@ -3,7 +3,7 @@
   <p>A full-stack SAT practice platform with adaptive study plans, AI explanations, PDF import, analytics, and admin tools.</p>
 
   <p>
-    <a href="README.zh-CN.md">中文版本</a>
+    <a href="README.zh-CN.md">Chinese</a>
     &middot;
     <a href="#quickstart">Quickstart</a>
     &middot;
@@ -21,12 +21,18 @@
   </p>
 </div>
 
+## Product Screenshots
+
 <p align="center">
-  <img src=".github/assets/readme-hero.svg" alt="SAT AI Tutor overview image" width="100%" />
+  <img src="docs/images/sat-ai-tutor-home.png" alt="SAT AI Tutor main dashboard screenshot" width="100%" />
 </p>
 
 <p align="center">
-  <img src="docs/images/sat-ai-tutor-dashboard.png" alt="SAT AI Tutor learning dashboard screenshot" width="100%" />
+  <img src="docs/images/sat-ai-tutor-practice.png" alt="SAT AI Tutor practice interface screenshot" width="100%" />
+</p>
+
+<p align="center">
+  <img src="docs/images/sat-ai-tutor-ai-analysis.png" alt="SAT AI Tutor AI analysis screenshot" width="100%" />
 </p>
 
 ## Overview
@@ -42,6 +48,16 @@ The core idea is simple: a wrong answer should become guided review, not just an
 - PDF ingestion and admin review workflow for SAT-style question banks.
 - Backend auth, migrations, metrics, membership, support flows, and tests.
 - One GHCR image that runs the Next.js frontend and Flask backend together.
+
+## Recent Production Fixes
+
+- Upgraded the frontend runtime to a patched Next.js release and refreshed vulnerable client dependencies.
+- Added post-build retention for hashed Next.js static assets so users with an older open tab do not hit missing chunk files after rebuilds.
+- Normalized GPT-5 Responses API payloads by removing unsupported `temperature` fields and improved OpenAI error logging.
+- Fixed Responses output parsing so explanations are read from the first text content item, not only the first response block.
+- Made admin draft publishing reliable by committing drafts before auto-publish checks and moving AI explanation generation out of the blocking publish request.
+- Disabled auto-publish for vision PDF imports so extracted questions can be reviewed before they enter the live question bank.
+- Normalized API URL building for same-origin deployments to avoid duplicated `/api/api` paths in SSE and admin import flows.
 
 ## Quickstart
 
@@ -64,7 +80,7 @@ Configure backend `.env` values before using OpenAI, email, or production databa
 
 ## Docker / GHCR
 
-The project now ships as one container image:
+The project ships as one container image:
 
 ```bash
 docker pull ghcr.io/ha22yx/sat-ai-tutor:latest
@@ -112,7 +128,7 @@ Do not bake `.env`, OpenAI keys, mail passwords, JWT secrets, admin passwords, u
 ```text
 frontend/                 Next.js student/admin UI
 sat_platform/             Flask backend, models, services, migrations, tests
-docs/images/              README dashboard screenshot
+docs/images/              README product screenshots
 Others/                   Planning notes, scripts, and SAT PDF samples
 scripts/docker-entrypoint.sh
 Dockerfile                Single image for frontend + backend

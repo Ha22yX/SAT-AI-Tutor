@@ -23,7 +23,7 @@ import {
 } from "@/services/admin";
 import { useAuth } from "@/hooks/use-auth";
 import { extractErrorMessage } from "@/lib/errors";
-import { env } from "@/lib/env";
+import { buildApiUrl } from "@/lib/env";
 import { getClientToken } from "@/lib/auth-storage";
 import { getCroppedBlob, SelectionRect } from "@/lib/image";
 import { X } from "lucide-react";
@@ -364,8 +364,7 @@ export function ImportWorkspace({ variant = "standalone" }: ImportWorkspaceProps
     if (!token) {
       return undefined;
     }
-    const baseUrl = env.apiBaseUrl.replace(/\/$/, "");
-    const url = new URL("/api/admin/questions/imports/events", baseUrl);
+    const url = new URL(buildApiUrl("/api/admin/questions/imports/events"));
     url.searchParams.set("token", token);
     const source = new EventSource(url.toString());
 
@@ -2094,4 +2093,3 @@ function DraftEditor({ draft, onSubmit, isSaving, error, onCaptureChoiceFigure, 
     </form>
   );
 }
-

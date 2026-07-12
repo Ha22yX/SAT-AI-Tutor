@@ -119,6 +119,8 @@ def _is_auto_publish_candidate(payload: dict) -> bool:
 def _auto_publish_draft_if_eligible(
     job: QuestionImportJob, draft: QuestionDraft
 ) -> bool:
+    if job.ingest_strategy == "vision_pdf":
+        return False
     payload = draft.payload if isinstance(draft.payload, dict) else {}
     if _extract_published_question_id(draft):
         return True
@@ -128,6 +130,13 @@ def _auto_publish_draft_if_eligible(
         question_payload = dict(payload)
         question_payload.pop("coarse_uid", None)
         question_payload.pop("status", None)
+        passage = question_payload.get("passage")
+        if (
+            isinstance(passage, dict)
+            and "metadata_json" in passage
+            and "metadata" not in passage
+        ):
+            passage["metadata"] = passage.pop("metadata_json")
         precomputed_explanations = None
         metadata = question_payload.get("metadata")
         if isinstance(metadata, dict):
@@ -361,6 +370,7 @@ def process_job(job_id: int, cancel_event=None) -> QuestionImportJob:
                         None,
                     )
                 draft = _save_draft(job, payload)
+                _commit_with_retry()
                 _auto_publish_draft_if_eligible(job, draft)
                 # Recompute from DB to avoid drift if any draft was removed/added outside the session.
                 job.parsed_questions = (

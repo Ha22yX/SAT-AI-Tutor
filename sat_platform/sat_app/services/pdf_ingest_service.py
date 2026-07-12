@@ -727,10 +727,14 @@ def _enrich_item(item: dict, *, job_id: int | None) -> dict | None:
         current_app.logger.warning("Validation/load failed: %s", exc)
         return None
 
-    # Ensure returned payload uses `metadata` key (not metadata_json) so drafts persist explanations
+    # Ensure returned payload uses public schema keys so draft payloads can be
+    # loaded again by QuestionCreateSchema during review/auto-publish.
     payload = dict(temp_data)
     if "metadata_json" in payload and "metadata" not in payload:
         payload["metadata"] = payload.pop("metadata_json")
+    passage = payload.get("passage")
+    if isinstance(passage, dict) and "metadata_json" in passage and "metadata" not in passage:
+        passage["metadata"] = passage.pop("metadata_json")
     if coarse_uid:
         payload["coarse_uid"] = coarse_uid
     return payload
@@ -1043,6 +1047,31 @@ def _solve_choice_answer(
 
 
 # ---------------- OpenAI call wrapper ----------------
+def _responses_model_disallows_temperature(model_name: str | None) -> bool:
+    normalized = str(model_name or "").strip().lower()
+    return normalized.startswith("gpt-5")
+
+
+def _prepare_responses_payload(payload: dict) -> dict:
+    prepared = dict(payload)
+    if _responses_model_disallows_temperature(prepared.get("model")):
+        prepared.pop("temperature", None)
+    return prepared
+
+
+def _response_error_excerpt(response: requests.Response | None) -> str:
+    if response is None:
+        return ""
+    try:
+        data = response.json()
+        message = ((data.get("error") or {}).get("message") if isinstance(data, dict) else None)
+        if message:
+            return str(message)[:500]
+    except Exception:
+        pass
+    return (response.text or "")[:500]
+
+
 def _call_responses_api(
     payload: dict,
     *,
@@ -1086,13 +1115,21 @@ def _call_responses_api(
             _enforce_rate_limit(model_name)
 
         try:
+            request_payload = _prepare_responses_payload(payload)
             future = requests.post(
                 f"{base_url}/responses",
                 headers=headers,
-                json=payload,
+                json=request_payload,
                 timeout=(connect_timeout, read_timeout),
             )
             response = future
+            if response.status_code >= 400:
+                app.logger.warning(
+                    "OpenAI Responses API error %s for %s: %s",
+                    response.status_code,
+                    purpose,
+                    _response_error_excerpt(response),
+                )
             response.raise_for_status()
             data = response.json()
             log_event(
@@ -1109,6 +1146,7 @@ def _call_responses_api(
                 attempt_hook("success", attempt, max_attempts, 0.0, None)
             break
         except requests.RequestException as exc:
+            error_detail = _response_error_excerpt(exc.response)
             if attempt_hook:
                 attempt_hook("retry", attempt, max_attempts, backoff * attempt, exc)
             if attempt >= max_attempts:
@@ -1120,6 +1158,7 @@ def _call_responses_api(
                         "max_attempts": max_attempts,
                         "duration_ms": int((time.perf_counter() - start_time) * 1000),
                         "error": str(exc),
+                        "error_detail": error_detail,
                     },
                 )
                 raise
@@ -1133,11 +1172,12 @@ def _call_responses_api(
             except Exception:
                 pass
             current_app.logger.warning(
-                "PDF ingest: %s attempt %s/%s failed (%s). Retrying in %.1fs",
+                "PDF ingest: %s attempt %s/%s failed (%s%s). Retrying in %.1fs",
                 purpose,
                 attempt,
                 max_attempts,
                 exc,
+                f": {error_detail}" if error_detail else "",
                 sleep_for,
             )
             time.sleep(sleep_for)

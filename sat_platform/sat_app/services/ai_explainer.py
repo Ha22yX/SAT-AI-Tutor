@@ -15,6 +15,19 @@ from .ai_client import get_ai_client
 
 ANIMATION_PROTOCOL = "tutor.anim.v1"
 
+
+def _responses_model_disallows_temperature(model_name: str | None) -> bool:
+    normalized = str(model_name or "").strip().lower()
+    return normalized.startswith("gpt-5")
+
+
+def _prepare_responses_payload(payload: dict) -> dict:
+    prepared = dict(payload)
+    if _responses_model_disallows_temperature(prepared.get("model")):
+        prepared.pop("temperature", None)
+    return prepared
+
+
 # Math domain and strategy prompts
 MATH_DOMAIN_MAP = (
     "SAT Math domains: (1) Algebra: linear equations/functions, Ax+By=C, systems, inequalities. "
@@ -383,7 +396,7 @@ def generate_explanation(
             response = requests.post(
                 f"{base_url}/responses",
                 headers=headers,
-                json=payload,
+                json=_prepare_responses_payload(payload),
                 timeout=(connect_timeout, read_timeout),
             )
             if response.status_code >= 400:
@@ -398,18 +411,21 @@ def generate_explanation(
             output_text = None
             if isinstance(raw, dict):
                 output = raw.get("output")
-                if isinstance(output, list) and output:
-                    content = (
-                        output[0].get("content")
-                        if isinstance(output[0], dict)
-                        else None
-                    )
-                    if isinstance(content, list) and content:
-                        text_obj = content[0]
-                        if isinstance(text_obj, dict):
+                if isinstance(output, list):
+                    for item in output:
+                        content = item.get("content") if isinstance(item, dict) else None
+                        if not isinstance(content, list):
+                            continue
+                        for text_obj in content:
+                            if not isinstance(text_obj, dict):
+                                continue
                             output_text = text_obj.get("text") or text_obj.get(
                                 "output_text"
                             )
+                            if output_text:
+                                break
+                        if output_text:
+                            break
                 # legacy chat fallback
                 if not output_text and raw.get("choices"):
                     output_text = raw["choices"][0]["message"]["content"]
