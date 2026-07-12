@@ -5,6 +5,8 @@
   <p>
     <a href="README.zh-CN.md">Chinese</a>
     &middot;
+    <a href="https://sat.rosebeg.com/">Live demo</a>
+    &middot;
     <a href="#quickstart">Quickstart</a>
     &middot;
     <a href="#docker--ghcr">Docker</a>
@@ -20,6 +22,14 @@
     <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-2e7d5b?style=for-the-badge" />
   </p>
 </div>
+
+## Live Demo
+
+Visit the hosted case-study site at [https://sat.rosebeg.com/](https://sat.rosebeg.com/). You can sign in with the demo account below to explore the student dashboard, SAT practice flow, and AI answer analysis.
+
+| Role | Username | Password |
+| --- | --- | --- |
+| Demo student | `demo` | `demo` |
 
 ## Product Screenshots
 
