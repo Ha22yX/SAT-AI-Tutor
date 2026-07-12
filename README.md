@@ -23,13 +23,25 @@
 
 ## Product Screenshots
 
+### Student Dashboard
+
+The main dashboard gives students a quick view of their daily study plan, progress, mastery trends, and recommended next actions.
+
 <p align="center">
   <img src="docs/images/sat-ai-tutor-home.png" alt="SAT AI Tutor main dashboard screenshot" width="100%" />
 </p>
 
+### Practice Interface
+
+The practice screen focuses on one SAT-style question at a time, with answer entry, progress tracking, figures, and review controls kept close to the work area.
+
 <p align="center">
   <img src="docs/images/sat-ai-tutor-practice.png" alt="SAT AI Tutor practice interface screenshot" width="100%" />
 </p>
+
+### AI Analysis
+
+The AI analysis view turns each answer into structured feedback, highlighting reasoning steps, explanations, and personalized review guidance.
 
 <p align="center">
   <img src="docs/images/sat-ai-tutor-ai-analysis.png" alt="SAT AI Tutor AI analysis screenshot" width="100%" />

@@ -23,13 +23,25 @@
 
 ## 产品截图
 
+### 学生主界面
+
+主界面集中展示每日学习计划、练习进度、掌握度趋势和下一步推荐，让学生打开网站后就能知道今天该做什么。
+
 <p align="center">
   <img src="docs/images/sat-ai-tutor-home.png" alt="SAT AI Tutor 网站主界面截图" width="100%" />
 </p>
 
+### 做题界面
+
+做题界面围绕单道 SAT 风格题目展开，把作答、进度、图表题信息和复盘操作放在同一个学习空间里。
+
 <p align="center">
   <img src="docs/images/sat-ai-tutor-practice.png" alt="SAT AI Tutor 做题界面截图" width="100%" />
 </p>
+
+### AI 分析
+
+AI 分析页面会把一次作答转化为结构化反馈，展示推理步骤、讲解重点和个性化复盘建议。
 
 <p align="center">
   <img src="docs/images/sat-ai-tutor-ai-analysis.png" alt="SAT AI Tutor AI 分析截图" width="100%" />
