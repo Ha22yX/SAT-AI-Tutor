@@ -33,29 +33,32 @@ Visit the hosted case-study site at [https://sat.rosebeg.com/auth/login?demo=1](
 
 ## Product Screenshots
 
-### Student Dashboard
-
-The main dashboard gives students a quick view of their daily study plan, progress, mastery trends, and recommended next actions.
-
-<p align="center">
-  <img src="docs/images/sat-ai-tutor-home.png" alt="SAT AI Tutor main dashboard screenshot" width="100%" />
-</p>
-
-### Practice Interface
-
-The practice screen focuses on one SAT-style question at a time, with answer entry, progress tracking, figures, and review controls kept close to the work area.
-
-<p align="center">
-  <img src="docs/images/sat-ai-tutor-practice.png" alt="SAT AI Tutor practice interface screenshot" width="100%" />
-</p>
-
-### AI Analysis
-
-The AI analysis view turns each answer into structured feedback, highlighting reasoning steps, explanations, and personalized review guidance.
-
-<p align="center">
-  <img src="docs/images/sat-ai-tutor-ai-analysis.png" alt="SAT AI Tutor AI analysis screenshot" width="100%" />
-</p>
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/sat-ai-tutor-home.png" alt="SAT AI Tutor main dashboard screenshot" />
+    </td>
+    <td width="50%">
+      <img src="docs/images/sat-ai-tutor-practice.png" alt="SAT AI Tutor practice interface screenshot" />
+    </td>
+  </tr>
+  <tr>
+    <td><strong>Student dashboard.</strong> Daily study plan, progress, mastery trends, and recommended next actions.</td>
+    <td><strong>Practice interface.</strong> Focused SAT-style question workspace with answer entry, figures, and review controls.</td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/sat-ai-tutor-ai-analysis.png" alt="SAT AI Tutor AI analysis screenshot" />
+    </td>
+    <td width="50%">
+      <img src="docs/images/sat-ai-tutor-dashboard.png" alt="SAT AI Tutor learning dashboard screenshot" />
+    </td>
+  </tr>
+  <tr>
+    <td><strong>AI analysis.</strong> Structured feedback with reasoning steps, explanations, and personalized review guidance.</td>
+    <td><strong>Learning workspace.</strong> SAT goals, tutor notes, and mastery signals gathered into one review surface.</td>
+  </tr>
+</table>
 
 ## Overview
 
