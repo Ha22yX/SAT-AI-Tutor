@@ -35,28 +35,23 @@ Visit the hosted case-study site at [https://sat.rosebeg.com/auth/login?demo=1](
 
 <table>
   <tr>
-    <td width="50%">
+    <td colspan="2" align="center">
       <img src="docs/images/sat-ai-tutor-home.png" alt="SAT AI Tutor main dashboard screenshot" />
+      <br />
+      <strong>Student dashboard.</strong> Daily study plan, progress, mastery trends, and recommended next actions.
     </td>
+  </tr>
+  <tr>
     <td width="50%">
       <img src="docs/images/sat-ai-tutor-practice.png" alt="SAT AI Tutor practice interface screenshot" />
     </td>
-  </tr>
-  <tr>
-    <td><strong>Student dashboard.</strong> Daily study plan, progress, mastery trends, and recommended next actions.</td>
-    <td><strong>Practice interface.</strong> Focused SAT-style question workspace with answer entry, figures, and review controls.</td>
-  </tr>
-  <tr>
     <td width="50%">
       <img src="docs/images/sat-ai-tutor-ai-analysis.png" alt="SAT AI Tutor AI analysis screenshot" />
     </td>
-    <td width="50%">
-      <img src="docs/images/sat-ai-tutor-dashboard.png" alt="SAT AI Tutor learning dashboard screenshot" />
-    </td>
   </tr>
   <tr>
+    <td><strong>Practice interface.</strong> Focused SAT-style question workspace with answer entry, figures, and review controls.</td>
     <td><strong>AI analysis.</strong> Structured feedback with reasoning steps, explanations, and personalized review guidance.</td>
-    <td><strong>Learning workspace.</strong> SAT goals, tutor notes, and mastery signals gathered into one review surface.</td>
   </tr>
 </table>
 
